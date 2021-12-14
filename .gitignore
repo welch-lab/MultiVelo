@@ -10,6 +10,6 @@ Thumbs.db
 .directory
 
 # Python build files
-/*.egg-info/
+.egg-info/
 /dist/
 /build/
