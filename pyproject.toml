@@ -1,8 +1,6 @@
 [build-system]
-requires = [
-    'flit_core >=3.2,<4'
-]
-build-backend = 'flit_core.buildapi'
+requires = ['setuptools>=45', 'wheel', 'setuptools_scm>=6.2']
+build-backend = 'setuptools.build_meta'
 
 [tool.black]
 include = '\.pyi?$'
@@ -12,6 +10,7 @@ exclude = '''
   | \.git
   | \.hg
   | \.mypy_cache
+  | \.nox
   | \.tox
   | \.venv
   | _build
@@ -20,67 +19,3 @@ exclude = '''
   | dist
 )/
 '''
-
-[tool.setuptools_scm]
-write_to = "multivelo/version.py"
-
-[project]
-name = 'multivelo'
-requires-python = '>=3.7'
-dependencies = [
-    'anndata>=0.7.5',
-    'scanpy>=1.5',
-    'scvelo>=0.2.3',
-    'loompy>=2.0.12',
-    'umap-learn>=0.3.10',
-    'h5py>=2.10.0',
-    'numba>=0.41.0',
-    'numpy>=1.17',
-    'scipy>=1.4.1',
-    'pandas>=0.23',
-    'scikit-learn>=0.23.0',
-    'matplotlib>=3.3.0',
-    'seaborn>=0.11.0',
-    'tqdm',
-    'joblib',
-    'ipywidgets'
-]
-dynamic = ['version']
-readme = 'README.rst'
-author = [
-    {name='Chen Li', email='chlseven@umich.edu'}
-]
-description = 'Multi-omic extension of single cell RNA velocity'
-license = [
-    {file='LICENSE'}
-]
-keywords = [
-    'RNA',
-    'velocity',
-    'single cell',
-    'transcriptomics',
-    'chromatin',
-    'epigenetic',
-    'epigenomic',
-    'gene regulation',
-    'multi-omic',
-    'dynamical'
-]
-classifiers = [
-    'Development Status :: 4 - Beta',
-    'Intended Audience :: Science/Research',
-    'License :: OSI Approved :: BSD License',
-    'Natural Language :: English',
-    'Operating System :: MacOS :: MacOS X',
-    'Operating System :: Microsoft :: Windows',
-    'Operating System :: POSIX :: Linux',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
-    'Programming Language :: Python :: 3.9',
-    'Topic :: Scientific/Engineering :: Bio-Informatics',
-    'Topic :: Scientific/Engineering :: Visualization'
-]
-
-[project.urls]
-repository = 'https://github.com/welch-lab/MultiVelo'

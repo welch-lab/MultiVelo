@@ -1,3 +1,29 @@
+Metadata-Version: 2.1
+Name: multivelo
+Version: 0.1.0
+Summary: Multiomic extension of single cell RNA velocity
+Home-page: https://github.com/welch-lab/MultiVelo
+Author: Chen Li
+Author-email: chlseven@umich.edu
+License: BSD 3-Clause License
+Keywords: RNA velocity,single-cell,transcriptomics,chromatin,epigenetic,epigenomic,gene regulation,multi-omic,dynamical
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Topic :: Scientific/Engineering :: Visualization
+Requires-Python: >=3.7
+License-File: LICENSE
+
 MultiVelo - Multi-omic extension of single-cell RNA velocity
 ============================================================
 
@@ -15,3 +41,5 @@ the degree of concordance or discordance between transcriptomic and epigenomic s
 each cell, and inferred the lengths of time lags between transcriptomic and epigenomic changes.
 
 An example to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_
+
+

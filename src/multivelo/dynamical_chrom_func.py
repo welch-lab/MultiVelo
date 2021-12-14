@@ -9,9 +9,8 @@ from scipy.spatial import KDTree
 from umap.umap_ import fuzzy_simplicial_set
 from sklearn.metrics import pairwise_distances
 from sklearn.mixture import GaussianMixture
-from anndata import AnnData
+import anndata
 import scanpy as sc
-from scanpy import Neighbors
 import scvelo as scv
 import pandas as pd
 import seaborn as sns
@@ -215,7 +214,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                 peak_index = np.where(var_names == peak)[0][0]
                 gene_mat[:,i] += adata_atac_X_copy[:,peak_index]
     gene_mat[gene_mat < 0] = 0
-    gene_mat = AnnData(X=csr_matrix(gene_mat))
+    gene_mat = anndata.AnnData(X=csr_matrix(gene_mat))
     gene_mat.obs_names = pd.Index(list(adata_atac.obs_names))
     gene_mat.var_names = pd.Index(promoter_genes)
     gene_mat = gene_mat[:,gene_mat.X.sum(0) > 0]
@@ -2705,7 +2704,7 @@ def recover_dynamics_chrom(adata_rna,
         import anndata as ad
         from scipy.sparse import diags
         rna_only = True
-        adata_atac = ad.AnnData(X=np.ones(adata_rna.shape), obs=adata_rna.obs, var=adata_rna.var)
+        adata_atac = anndata.AnnData(X=np.ones(adata_rna.shape), obs=adata_rna.obs, var=adata_rna.var)
         adata_atac.layers['Mc'] = np.ones(adata_rna.shape)
     if adata_rna.shape != adata_atac.shape:
         raise ValueError(f'Shape of RNA and ATAC adata objects do not match: {adata_rna.shape} {adata_atac.shape}')
@@ -2726,7 +2725,7 @@ def recover_dynamics_chrom(adata_rna,
     else:
         raise ValueError('Currently, extra_color_key must be a single string of categories and available in adata obs, and its colors can be found in adata uns')
     if 'connectivities' not in adata_rna.obsp.keys() or np.min((adata_rna.obsp['connectivities'] > 0).sum(1).A) > k_dist:
-        neighbors = Neighbors(adata_rna)
+        neighbors = sc.Neighbors(adata_rna)
         neighbors.compute_neighbors(n_neighbors=n_neighbors, knn=True, n_pcs=n_pcs)
         rna_conn = neighbors.connectivities
     else:
@@ -4312,7 +4311,7 @@ def compute_quantile_scores(adata,
     quantile_genes: `.var`
         genes with good quantilty ellipse fits
     """
-    neighbors = Neighbors(adata)
+    neighbors = sc.Neighbors(adata)
     neighbors.compute_neighbors(n_neighbors=n_neighbors, knn=True, n_pcs=n_pcs)
     conn = neighbors.connectivities
     conn.setdiag(1)
