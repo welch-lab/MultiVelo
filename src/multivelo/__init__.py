@@ -18,3 +18,6 @@ from .dynamical_chrom_func import (
     compute_quantile_scores,
     cluster_by_quantile
 )
+
+from importlib.metadata import version
+__version__ = version(__name__)
