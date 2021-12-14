@@ -14,7 +14,7 @@ datasets revealed two distinct mechanisms of regulation by chromatin accessibili
 the degree of concordance or discordance between transcriptomic and epigenomic states within 
 each cell, and inferred the lengths of time lags between transcriptomic and epigenomic changes.
 
-Install through PyPI: :bash:`pip install multivelo`.
+Install through PyPI: **pip install multivelo**.
 
 
 An example to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_
