@@ -1,4 +1,4 @@
-MultiVelo - Multi-omic extension of single-cell RNA velocity
+MultiVelo - Velocity Inference from Single-Cell Multi-Omic Data
 ============================================================
 
 Single-cell multi-omic datasets, in which multiple molecular modalities are profiled 
