@@ -17,21 +17,18 @@ each cell, and inferred the lengths of time lags between transcriptomic and epig
 Install through PyPI: **pip install multivelo**
 
 
-An example to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_.
+A tutorial showing how to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_.
 
-We will use the embryonic E18 mouse brain from 10X Multiome as an example (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_).
+We use the embryonic E18 mouse brain from 10X Multiome as an example (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_).
 
-If you would like to run the example yourself. CellRanger output files can be downloaded from 
+CellRanger output files can be downloaded from 
 `10X website <https://www.10xgenomics.com/resources/datasets/fresh-embryonic-e-18-mouse-brain-5-k-1-standard-1-0-0>`_. 
 Crucially, the filtered feature barcode matrix folder, ATAC peak annotations TSV, and the feature 
 linkage BEDPE file in the secondary analysis outputs folder will be needed in this demo.
 
-Quantified unspliced and spliced counts from Velocyto can be downloaded from MultiVelo Github page.
-
+You can download the processed data that we used for this analysis if you want to run the example yourself.
+Unspliced and spliced counts, as well as cell type annotations can be downloaded from the MultiVelo Github page.
 We provide the cell annotations for this dataset in "cell_annotations.tsv" on the Github page. 
-(To download from Github, click on the file, then click "Raw" on the top right corner. 
-If it opens in your browser, you can download the page as a text file.)
-
-Weighted nearest neighbors from Seurat can be downloaded from Github folder "seurat_wnn", 
+We also provide the nearest neighbor graph used to smooth gene expression and chromatin accessibility values in the Github folder "seurat_wnn", 
 which contains three files: "nn_cells.txt", "nn_dist.txt", and "nn_idx.txt". The R script used 
-to generate such files can also be found on the Github page (to be added).
+to generate these files can also be found on the Github page (to be added).
