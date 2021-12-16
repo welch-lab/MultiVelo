@@ -29,6 +29,6 @@ linkage BEDPE file in the secondary analysis outputs folder will be needed in th
 You can download the processed data that we used for this analysis if you want to run the example yourself.
 Unspliced and spliced counts, as well as cell type annotations can be downloaded from the MultiVelo Github page.
 We provide the cell annotations for this dataset in "cell_annotations.tsv" on the Github page. 
-We also provide the nearest neighbor graph used to smooth gene expression and chromatin accessibility values in the Github folder "seurat_wnn", 
-which contains three files: "nn_cells.txt", "nn_dist.txt", and "nn_idx.txt". The R script used 
-to generate these files can also be found on the Github page (to be added).
+We also provide the nearest neighbor graph used to smooth chromatin accessibility values in the Github folder "seurat_wnn", 
+which contains a zip file of three files: "nn_cells.txt", "nn_dist.txt", and "nn_idx.txt". Please unzip the archive after downloading. 
+The R script used to generate these files can also be found on the Github page (to be added).
