@@ -26,9 +26,9 @@ CellRanger output files can be downloaded from
 Crucially, the filtered feature barcode matrix folder, ATAC peak annotations TSV, and the feature 
 linkage BEDPE file in the secondary analysis outputs folder will be needed in this demo.
 
-You can download the processed data that we used for this analysis if you want to run the example yourself.
-Unspliced and spliced counts, as well as cell type annotations can be downloaded from the MultiVelo Github page.
-We provide the cell annotations for this dataset in "cell_annotations.tsv" on the Github page. 
-We also provide the nearest neighbor graph used to smooth chromatin accessibility values in the Github folder "seurat_wnn", 
+You can download the processed data that we used for this analysis if you want to run the example yourself. 
+Unspliced and spliced counts, as well as cell type annotations can be downloaded from the MultiVelo GitHub page. 
+We provide the cell annotations for this dataset in "cell_annotations.tsv". 
+We also provide the nearest neighbor graph used to smooth chromatin accessibility values in the GitHub folder "seurat_wnn", 
 which contains a zip file of three files: "nn_cells.txt", "nn_dist.txt", and "nn_idx.txt". Please unzip the archive after downloading. 
-The R script used to generate these files can also be found on the Github page (to be added).
+The R script used to generate these files can also be found in the same folder.
