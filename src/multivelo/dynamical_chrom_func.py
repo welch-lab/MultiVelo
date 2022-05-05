@@ -6,11 +6,11 @@ from scipy import sparse
 from scipy.sparse import coo_matrix, csr_matrix, diags
 from scipy.optimize import minimize
 from scipy.spatial import KDTree
-from umap.umap_ import fuzzy_simplicial_set
 from sklearn.metrics import pairwise_distances
 from sklearn.mixture import GaussianMixture
-import anndata
+from anndata import AnnData
 import scanpy as sc
+from scanpy import Neighbors
 import scvelo as scv
 import pandas as pd
 import seaborn as sns
@@ -19,344 +19,6 @@ from numba.typed import List
 from tqdm.auto import tqdm
 import ipywidgets
 from joblib import Parallel, delayed
-
-
-def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=10000, min_corr=0.5, return_dict=False, verbose=False):
-    """Peak to gene aggregation.
-
-    This function aggregates promoter and enhancer peaks to genes based on the 10X linkage file.
-
-    Parameters
-    ----------
-    adata_atac: :class:`~anndata.AnnData`
-        ATAC anndata object which stores raw peak counts.
-    peak_annot_file: `str`
-        Peak annotation file from 10X CellRanger ARC.
-    linkage_file: `str`
-        Peak-gene linkage file from 10X CellRanger ARC. This file stores highly correlated peak-peak
-        and peak-gene pair information.
-    peak_dist: `int` (default: 10000)
-        Maximum distance for peaks to be included for a gene.
-    min_corr: `float` (default: 0.5)
-        Minimum correlation for a peak to be considered as enhancer.
-    return_dict: `bool` (default: `False`)
-        Whether to return promoter and enhancer dictionaries.
-    verbose: `bool` (default: `False`)
-        Whether to print number of genes with promoter peaks.
-
-    Returns
-    -------
-    A new ATAC anndata object which stores gene aggreagted peak counts.
-    Additionally, if `return_dict==True`:
-        A dictionary which stores genes and promoter peaks.
-        A dictionary which stores genes and enhancer peaks.
-    """
-    promoter_dict = {}
-    distal_dict = {}
-    gene_body_dict = {}
-    corr_dict = {}
-
-    with open(peak_annot_file) as f:
-        header = next(f)
-        tmp = header.split('\t')
-        if len(tmp) == 4:
-            cellranger_version = 1
-        elif len(tmp) == 6:
-            cellranger_version = 2
-        else:
-            raise ValueError('Peak annotation file should contain 4 columns (CellRanger ARC 1.0.0) or 5 columns (CellRanger ARC 2.0.0)')
-        if verbose:
-            print(f'CellRanger ARC identified as {cellranger_version}.0.0')
-        if cellranger_version == 1:
-            for line in f:
-                tmp = line.rstrip().split('\t')
-                tmp1 = tmp[0].split('_')
-                peak = f'{tmp1[0]}:{tmp1[1]}-{tmp1[2]}'
-                if tmp[1] != '':
-                    genes = tmp[1].split(';')
-                    dists = tmp[2].split(';')
-                    types = tmp[3].split(';')
-                    for i,gene in enumerate(genes):
-                        dist = dists[i]
-                        annot = types[i]
-                        if annot == 'promoter':
-                            if gene not in promoter_dict:
-                                promoter_dict[gene] = [peak]
-                            else:
-                                promoter_dict[gene].append(peak)
-                        elif annot == 'distal':
-                            if dist == '0':
-                                if gene not in gene_body_dict:
-                                    gene_body_dict[gene] = [peak]
-                                else:
-                                    gene_body_dict[gene].append(peak)
-                            else:
-                                if gene not in distal_dict:
-                                    distal_dict[gene] = [peak]
-                                else:
-                                    distal_dict[gene].append(peak)
-        else:
-            for line in f:
-                tmp = line.rstrip().split('\t')
-                peak = f'{tmp[0]}:{tmp[1]}-{tmp[2]}'
-                gene = tmp[3]
-                dist = tmp[4]
-                annot = tmp[5]
-                if annot == 'promoter':
-                    if gene not in promoter_dict:
-                        promoter_dict[gene] = [peak]
-                    else:
-                        promoter_dict[gene].append(peak)
-                elif annot == 'distal':
-                    if dist == '0':
-                        if gene not in gene_body_dict:
-                            gene_body_dict[gene] = [peak]
-                        else:
-                            gene_body_dict[gene].append(peak)
-                    else:
-                        if gene not in distal_dict:
-                            distal_dict[gene] = [peak]
-                        else:
-                            distal_dict[gene].append(peak)
-
-    with open(linkage_file) as f:
-        for line in f:
-            tmp = line.rstrip().split('\t')
-            if tmp[12] == "peak-peak":
-                peak1 = f'{tmp[0]}:{tmp[1]}-{tmp[2]}'
-                peak2 = f'{tmp[3]}:{tmp[4]}-{tmp[5]}'
-                tmp2 = tmp[6].split('><')[0][1:].split(';')
-                tmp3 = tmp[6].split('><')[1][:-1].split(';')
-                corr = float(tmp[7])
-                for t2 in tmp2:
-                    gene1 = t2.split('_')
-                    for t3 in tmp3:
-                        gene2 = t3.split('_')
-                        # one of the peaks is in promoter, peaks belong to the same gene or are close in distance
-                        if ((gene1[1] == "promoter") != (gene2[1] == "promoter")) and ((gene1[0] == gene2[0]) or (float(tmp[11]) < peak_dist)):
-                            if gene1[1] == "promoter":
-                                gene = gene1[0]
-                            else:
-                                gene = gene2[0]
-                            if gene in corr_dict:
-                                # peak 1 is in promoter, peak 2 is not in gene body -> peak 2 is added to gene 1
-                                if peak2 not in corr_dict[gene] and gene1[1] == "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
-                                    corr_dict[gene][0].append(peak2)
-                                    corr_dict[gene][1].append(corr)
-                                # peak 2 is in promoter, peak 1 is not in gene body -> peak 1 is added to gene 2
-                                if peak1 not in corr_dict[gene] and gene2[1] == "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
-                                    corr_dict[gene][0].append(peak1)
-                                    corr_dict[gene][1].append(corr)
-                            else:
-                                # peak 1 is in promoter, peak 2 is not in gene body -> peak 2 is added to gene 1
-                                if gene1[1] == "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
-                                    corr_dict[gene] = [[peak2], [corr]]
-                                # peak 2 is in promoter, peak 1 is not in gene body -> peak 1 is added to gene 2
-                                if gene2[1] == "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
-                                    corr_dict[gene] = [[peak1], [corr]]
-            elif tmp[12] == "peak-gene":
-                peak1 = f'{tmp[0]}:{tmp[1]}-{tmp[2]}'
-                tmp2 = tmp[6].split('><')[0][1:].split(';')
-                gene2 = tmp[6].split('><')[1][:-1]
-                corr = float(tmp[7])
-                for t2 in tmp2:
-                    gene1 = t2.split('_')
-                    # peak 1 belongs to gene 2 or are close in distance -> peak 1 is added to gene 2
-                    if ((gene1[0] == gene2) or (float(tmp[11]) < peak_dist)):
-                        gene = gene1[0]
-                        if gene in corr_dict:
-                            if peak1 not in corr_dict[gene] and gene1[1] != "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
-                                corr_dict[gene][0].append(peak1)
-                                corr_dict[gene][1].append(corr)
-                        else:
-                            if gene1[1] != "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
-                                corr_dict[gene] = [[peak1], [corr]]
-            elif tmp[12] == "gene-peak":
-                peak2 = f'{tmp[3]}:{tmp[4]}-{tmp[5]}'
-                gene1 = tmp[6].split('><')[0][1:]
-                tmp3 = tmp[6].split('><')[1][:-1].split(';')
-                corr = float(tmp[7])
-                for t3 in tmp3:
-                    gene2 = t3.split('_')
-                    # peak 1 belongs to gene 2 or are close in distance -> peak 1 is added to gene 2
-                    if ((gene1 == gene2[0]) or (float(tmp[11]) < peak_dist)):
-                        gene = gene1
-                        if gene in corr_dict:
-                            if peak2 not in corr_dict[gene] and gene2[1] != "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
-                                corr_dict[gene][0].append(peak2)
-                                corr_dict[gene][1].append(corr)
-                        else:
-                            if gene2[1] != "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
-                                corr_dict[gene] = [[peak2], [corr]]
-
-    gene_dict = promoter_dict
-    enhancer_dict = {}
-    promoter_genes = list(promoter_dict.keys())
-    if verbose:
-        print(f'Found {len(promoter_genes)} genes with promoter peaks')
-    for gene in promoter_genes:
-        enhancer_dict[gene] = []
-        if gene in corr_dict:
-            for j, peak in enumerate(corr_dict[gene][0]):
-                corr = corr_dict[gene][1][j]
-                if corr > min_corr:
-                    if peak not in gene_dict[gene]:
-                        gene_dict[gene].append(peak)
-                        enhancer_dict[gene].append(peak)
-
-    adata_atac_X_copy = adata_atac.X.A
-    gene_mat = np.zeros((adata_atac.shape[0], len(promoter_genes)))
-    var_names = adata_atac.var_names.to_numpy()
-    for i, gene in tqdm(enumerate(promoter_genes), total=len(promoter_genes)):
-        peaks = gene_dict[gene]
-        for peak in peaks:
-            if peak in var_names:
-                peak_index = np.where(var_names == peak)[0][0]
-                gene_mat[:,i] += adata_atac_X_copy[:,peak_index]
-    gene_mat[gene_mat < 0] = 0
-    gene_mat = anndata.AnnData(X=csr_matrix(gene_mat))
-    gene_mat.obs_names = pd.Index(list(adata_atac.obs_names))
-    gene_mat.var_names = pd.Index(promoter_genes)
-    gene_mat = gene_mat[:,gene_mat.X.sum(0) > 0]
-    if return_dict:
-        return gene_mat, promoter_dict, enhancer_dict
-    else:
-        return gene_mat
-
-
-def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
-    """TF-IDF normalization.
-
-    This function normalizes counts in an AnnData object with TF-IDF.
-
-    Parameters
-    ----------
-    adata_atac: :class:`~anndata.AnnData`
-        ATAC anndata object.
-    scale_factor: `float` (default: 1e4)
-        Value to be multiplied after normalization.
-    copy: `bool` (default: `False`)
-        Whether to return a copy or modify `.X` directly.
-
-    Returns
-    -------
-    If `copy==True`, a new ATAC anndata object which stores normalized counts in `.X`.
-    """
-    npeaks = adata_atac.X.sum(1)
-    npeaks_inv = csr_matrix(1.0/npeaks)
-    tf = adata_atac.X.multiply(npeaks_inv)
-    idf = diags(np.ravel(adata_atac.X.shape[0] / adata_atac.X.sum(0))).log1p()
-    if copy:
-        adata_atac_copy = adata_atac.copy()
-        adata_atac_copy.X = tf.dot(idf) * scale_factor
-        return adata_atac_copy
-    else:
-        adata_atac.X = tf.dot(idf) * scale_factor
-
-
-def top_n_sparse(conn, n):
-    conn_ll = conn.tolil()
-    for i in range(conn_ll.shape[0]):
-        row_data = np.array(conn_ll.data[i])
-        row_idx = np.array(conn_ll.rows[i])
-        new_idx = row_data.argsort()[-n:]
-        top_val = row_data[new_idx]
-        top_idx = row_idx[new_idx]
-        conn_ll.data[i] = top_val.tolist()
-        conn_ll.rows[i] = top_idx.tolist()
-    conn = conn_ll.tocsr()
-    idx1 = conn > 0
-    idx2 = conn > 0.25
-    idx3 = conn > 0.5
-    conn[idx1] = 0.25
-    conn[idx2] = 0.5
-    conn[idx3] = 1
-    conn.eliminate_zeros()
-    return conn
-
-
-def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None, n_neighbors=None):
-    """KNN smoothing.
-
-    This function smooth (impute) the count matrix with k nearest neighbors.
-    The inputs can be either KNN index and distance matrices or a pre-computed
-    connectivities matrix (for example in adata_rna object).
-
-    Parameters
-    ----------
-    adata_atac: :class:`~anndata.AnnData`
-        ATAC anndata object.
-    nn_idx: `np.darray` (default: `None`)
-        KNN index matrix of size (cells, k).
-    nn_dist: `np.darray` (default: `None`)
-        KNN distance matrix of size (cells, k).
-    conn: `csr_matrix` (default: `None`)
-        Pre-computed connectivities matrix.
-    n_neighbors: `int` (default: `None`)
-        Top N neighbors to extract for each cell in the connectivities matrix.
-
-    Returns
-    -------
-    `.layers['Mc]` stores imputed values.
-    """
-    if nn_idx is not None and nn_dist is not None:
-        if nn_idx.shape[0] != adata_atac.shape[0]:
-            raise ValueError('Number of rows of KNN indices does not equal to number of observations.')
-        if nn_dist.shape[0] != adata_atac.shape[0]:
-            raise ValueError('Number of rows of KNN distances does not equal to number of observations.')
-        X = coo_matrix(([], ([], [])), shape=(nn_idx.shape[0], 1))
-        conn, sigma, rho, dists = fuzzy_simplicial_set(X, nn_idx.shape[1], None, None, knn_indices=nn_idx-1, knn_dists=nn_dist, return_dists=True)
-    elif conn is not None:
-        pass
-    else:
-        raise ValueError('Please input nearest neighbor indices and distances, or a connectivities matrix of size n x n, with columns being neighbors.' + 
-                         ' For example, RNA connectivities can usually be found in adata.obsp.')
-    conn = conn.tocsr().copy()
-    n_counts = (conn > 0).sum(1).A1
-    if n_neighbors is not None and n_neighbors < n_counts.min():
-        conn = top_n_sparse(conn, n_neighbors)
-    conn.setdiag(1)
-    conn_norm = conn.multiply(1.0 / conn.sum(1)).tocsr()
-    adata_atac.layers['Mc'] = csr_matrix.dot(conn_norm, adata_atac.X)
-    adata_atac.obsp['connectivities'] = conn
-
-
-def calculate_qc_metrics(adata, **kwargs):
-    """Basic QC metrics.
-
-    This function calculate basic QC metrics with `scanpy.pp.calculate_qc_metrics`.
-    Additionally, total counts and the ratio of unspliced and spliced matrices, as well as
-    the cell cycle scores (with `scvelo.tl.score_genes_cell_cycle`) will be computed. 
-
-    Parameters
-    ----------
-    adata: :class:`~anndata.AnnData`
-        RNA anndata object. Required fields: `unspliced` and `spliced`.
-    Additional parameters passed to `scanpy.pp.calculate_qc_metrics`.
-
-    Returns
-    -------
-    Outputs of `scanpy.pp.calculate_qc_metrics` and `scvelo.tl.score_genes_cell_cycle`.
-    total_unspliced, total_spliced: `.var`
-        total counts of unspliced and spliced matrices.
-    unspliced_ratio: `.var`
-        ratio of unspliced counts vs (unspliced + spliced counts).
-    cell_cycle_score: `.var`
-        cell cycle score difference between G2M_score and S_score.
-    """
-    sc.pp.calculate_qc_metrics(adata, **kwargs)
-    if 'spliced' not in adata.layers:
-        raise ValueError('Spliced matrix not found in adata.layers')
-    if 'unspliced' not in adata.layers:
-        raise ValueError('Unspliced matrix not found in adata.layers')
-    total_s = np.nansum(adata.layers['spliced'], axis=1)
-    total_u = np.nansum(adata.layers['unspliced'], axis=1)
-    adata.var['total_unspliced'] = total_u
-    adata.var['total_spliced'] = total_s
-    adata.var['unspliced_ratio'] = total_u / (total_s + total_u)
-    scv.tl.score_genes_cell_cycle(adata)
-    adata.obs['cell_cycle_score'] = adata.obs['G2M_score'] - adata.obs['S_score']
-
 
 @jit(nopython=True, fastmath=True)
 def predict_exp(tau, 
@@ -609,19 +271,19 @@ def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1, pred_r=
 
 
 @jit(nopython=True, fastmath=True)
-def velocity(t, 
-             t_sw_array, 
-             state, 
-             alpha_c, 
-             alpha, 
-             beta, 
-             gamma, 
-             rescale_c, 
-             rescale_u, 
-             scale_cc=1, 
-             model=1, 
-             total_h=20, 
-             rna_only=False):
+def compute_velocity(t, 
+                     t_sw_array, 
+                     state, 
+                     alpha_c, 
+                     alpha, 
+                     beta, 
+                     gamma, 
+                     rescale_c, 
+                     rescale_u, 
+                     scale_cc=1, 
+                     model=1, 
+                     total_h=20, 
+                     rna_only=False):
 
     if state is None:
         state0 = t<=t_sw_array[0]
@@ -951,7 +613,7 @@ def calculate_dist_and_time(c, u, s,
         return min_dist, state_pred, max_u, max_s, t_sw_adjust
 
 
-@jit(nopython=True, fastmath=True)
+#@jit(nopython=True, fastmath=True)
 def compute_likelihood(c, u, s, 
                        t_sw_array, 
                        alpha_c, alpha, beta, gamma, 
@@ -961,16 +623,25 @@ def compute_likelihood(c, u, s,
                        scale_cc=1, 
                        scale_factor=None, 
                        model=1, 
+                       weight=None, 
                        total_h=20,
                        rna_only=False):
 
-    n = len(u)
+    if weight is None:
+        weight = np.full(c.shape, True)
+    c_ = c[weight]
+    u_ = u[weight]
+    s_ = s[weight]
+    t_pred_ = t_pred[weight]
+    state_pred_ = state_pred[weight]
+
+    n = len(u_)
     if scale_factor is None:
         scale_factor = np.ones(3)
-    tau1 = t_pred[state_pred == 0]
-    tau2 = t_pred[state_pred == 1] - t_sw_array[0]
-    tau3 = t_pred[state_pred == 2] - t_sw_array[1]
-    tau4 = t_pred[state_pred == 3] - t_sw_array[2]
+    tau1 = t_pred_[state_pred_ == 0]
+    tau2 = t_pred_[state_pred_ == 1] - t_sw_array[0]
+    tau3 = t_pred_[state_pred_ == 2] - t_sw_array[1]
+    tau4 = t_pred_[state_pred_ == 3] - t_sw_array[2]
     tau_list = [tau1, tau2, tau3, tau4]
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
@@ -986,10 +657,14 @@ def compute_likelihood(c, u, s,
                                rna_only=rna_only)
     rescale_factor = np.array([rescale_c, rescale_u, 1.0])
     exp_list = [x*rescale_factor*scale_factor for x in exp_list]
-    exp_mat = np.hstack((np.reshape(c, (-1,1)), np.reshape(u, (-1,1)), np.reshape(s, (-1,1)))) * scale_factor
+    exp_mat = np.hstack((np.reshape(c_, (-1,1)), np.reshape(u_, (-1,1)), np.reshape(s_, (-1,1)))) * scale_factor
     diffs = np.empty((n,3), dtype=u.dtype)
+    likelihood_c = 0
+    likelihood_u = 0
+    likelihood_s = 0
+    ssd_c, var_c = 0, 0
     for i in range(switch+1):
-        index = state_pred == i
+        index = state_pred_ == i
         if np.sum(index) > 0:
             diff = exp_mat[index,:] - exp_list[i]
             diffs[index, :] = diff
@@ -1018,11 +693,16 @@ def compute_likelihood(c, u, s,
         var_c = np.var(diff_c)
         var_u = np.var(diff_u)
         var_s = np.var(diff_s)
-        nll = 0.5 * np.log(2 * np.pi * var_c) + 0.5 / n / var_c * np.sum(dist_c)
-        nll += 0.5 * np.log(2 * np.pi * var_u) + 0.5 / n / var_u * np.sum(dist_u)
-        nll += 0.5 * np.log(2 * np.pi * var_s) + 0.5 / n / var_s * np.sum(dist_s)
+        ssd_c = np.sum(dist_c)
+        nll_c = 0.5 * np.log(2 * np.pi * var_c) + 0.5 / n / var_c * np.sum(dist_c)
+        nll_u = 0.5 * np.log(2 * np.pi * var_u) + 0.5 / n / var_u * np.sum(dist_u)
+        nll_s = 0.5 * np.log(2 * np.pi * var_s) + 0.5 / n / var_s * np.sum(dist_s)
+        nll = nll_c + nll_u + nll_s
+        likelihood_c = np.exp(-nll_c)
+        likelihood_u = np.exp(-nll_u)
+        likelihood_s = np.exp(-nll_s)
     likelihood = np.exp(-nll)
-    return likelihood
+    return likelihood, likelihood_c, ssd_c, var_c, likelihood_u, likelihood_s
 
 
 class ChromatinDynamical:
@@ -1042,6 +722,7 @@ class ChromatinDynamical:
                  partial=None, 
                  direction=None, 
                  rna_only=False, 
+                 fit_decoupling=True, 
                  extra_color=None, 
                  rescale_u=None, 
                  alpha=None, 
@@ -1058,6 +739,7 @@ class ChromatinDynamical:
         # fitting arguments
         self.init_mode = init_mode
         self.rna_only = rna_only
+        self.fit_decoupling = fit_decoupling
         self.max_iter = max_iter
         self.n_anchors = np.clip(int(fit_args['t']), 200, 2000)
         self.k_dist = np.clip(int(fit_args['k']), 1, 20)
@@ -1065,6 +747,7 @@ class ChromatinDynamical:
         self.weight_c = np.clip(fit_args['weight_c'], 0.1, 5)
         self.outlier = np.clip(fit_args['outlier'], 80, 100)
         self.model = int(model) if isinstance(model, float) else model
+        self.model_ = None
         if self.model == 0 and self.init_mode == 'invert':
             self.init_mode = 'grid'
 
@@ -1110,6 +793,20 @@ class ChromatinDynamical:
         self.u = self.u_all[self.non_zero & self.non_outlier]
         self.s = self.s_all[self.non_zero & self.non_outlier]
         self.low_quality = len(self.u) < 10
+        # scale modalities
+        self.std_c, self.std_u, self.std_s = np.std(self.c_all) if not self.rna_only else 1.0, np.std(self.u_all), np.std(self.s_all)
+        if self.std_u == 0 or self.std_s == 0:
+            self.low_quality = True
+        self.scale_c, self.scale_u, self.scale_s = np.max(self.c_all) if not self.rna_only else 1.0, self.std_u/self.std_s, 1.0
+        self.c_all /= self.scale_c
+        self.u_all /= self.scale_u
+        self.s_all /= self.scale_s
+        self.c /= self.scale_c
+        self.u /= self.scale_u
+        self.s /= self.scale_s
+        self.scale_factor = np.array([np.std(self.c_all)/self.std_s/self.weight_c, 1.0, 1.0])
+        self.scale_factor[0] = 1 if self.rna_only else self.scale_factor[0]
+        self.max_u, self.max_s = np.max(self.u), np.max(self.s)
         if self.conn is not None:
             self.conn_sub = self.conn[np.ix_(self.non_zero & self.non_outlier, self.non_zero & self.non_outlier)]
         else:
@@ -1142,6 +839,8 @@ class ChromatinDynamical:
         self.state = None
         self.loss = [np.inf]
         self.likelihood = -1.0
+        self.l_c = 0
+        self.ssd_c, self.var_c = 0, 0
         self.scale_cc = 1.0
         self.fitting_flag_ = 0
         self.velocity = None
@@ -1183,24 +882,9 @@ class ChromatinDynamical:
         else:
             self.check_partial_trajectory(fit_gmm=False, fit_slope=False, determine_model=determine_model)
 
-        # scale modalities
-        self.std_c, self.std_u, self.std_s = np.std(self.c_all) if not self.rna_only else 1.0, np.std(self.u_all), np.std(self.s_all)
-        if self.std_u == 0 or self.std_s == 0:
-            self.low_quality = True
-        self.scale_c, self.scale_u, self.scale_s = np.max(self.c_all) if not self.rna_only else 1.0, self.std_u/self.std_s, 1.0
-        self.c_all /= self.scale_c
-        self.u_all /= self.scale_u
-        self.s_all /= self.scale_s
-        self.c /= self.scale_c
-        self.u /= self.scale_u
-        self.s /= self.scale_s
-        self.scale_factor = np.array([np.std(self.c_all)/self.std_s/self.weight_c, 1.0, 1.0])
-        self.scale_factor[0] = 1 if self.rna_only else self.scale_factor[0]
-        self.max_u, self.max_s = np.max(self.u), np.max(self.s)
-
         # intialize steady state parameters
         if not self.known_pars and not self.low_quality:
-            self.initialize_steady_state_params()
+            self.initialize_steady_state_params(model_mismatch=self.model != self.model_)
         if self.known_pars:
             self.params = np.array([self.t_sw_1, 
                                     self.t_sw_2-self.t_sw_1, 
@@ -1325,29 +1009,30 @@ class ChromatinDynamical:
                         self.direction = 'complete'
 
         # model pre-determination
-        if determine_model:
-            if self.direction == 'on':
-                self.model = 1
-            elif self.direction == 'off':
-                self.model = 2
-            else:
-                c_high = self.c >= np.mean(self.c) + 2 * np.std(self.c)
+        if self.direction == 'on':
+            self.model_ = 1
+        elif self.direction == 'off':
+            self.model_ = 2
+        else:
+            c_high = self.c >= np.mean(self.c) + 2 * np.std(self.c)
+            c_high = c_high[non_nan]
+            if np.sum(c_high) < 10:
+                c_high = self.c >= np.mean(self.c) + np.std(self.c)
                 c_high = c_high[non_nan]
-                if np.sum(c_high) < 10:
-                    c_high = self.c >= np.mean(self.c) + np.std(self.c)
-                    c_high = c_high[non_nan]
-                if np.sum(c_high) < 10:
-                    c_high = self.c >= np.percentile(self.c, 90)
-                    c_high = c_high[non_nan]
-                if np.sum(self.c[non_nan][c_high]==0) > 0.5*np.sum(c_high):
-                    self.low_quality = True
-                    return
-                c_high_on = np.sum(c_high & on)
-                c_high_off = np.sum(c_high & off)
-                if c_high_on > c_high_off:
-                    self.model = 1
-                else:
-                    self.model = 2
+            if np.sum(c_high) < 10:
+                c_high = self.c >= np.percentile(self.c, 90)
+                c_high = c_high[non_nan]
+            if np.sum(self.c[non_nan][c_high]==0) > 0.5*np.sum(c_high):
+                self.low_quality = True
+                return
+            c_high_on = np.sum(c_high & on)
+            c_high_off = np.sum(c_high & off)
+            if c_high_on > c_high_off:
+                self.model_ = 1
+            else:
+                self.model_ = 2
+        if determine_model:
+            self.model = self.model_
 
         if self.verbose >= 1 and not self.known_pars:
             if fit_gmm or fit_slope:
@@ -1357,7 +1042,7 @@ class ChromatinDynamical:
                 print(f'predicted model: {self.model}')
 
 
-    def initialize_steady_state_params(self):
+    def initialize_steady_state_params(self, model_mismatch=False):
         self.scale_cc = 1.0
         self.rescale_c = 1.0
         # estimate rescale factor for u
@@ -1391,6 +1076,15 @@ class ChromatinDynamical:
         s0_r = np.mean(ss_s)
         if c0_r < c_upper:
             c0_r = c_upper + 0.1
+
+        # adjust chromatin level for reasonable initialization
+        if model_mismatch or not self.fit_decoupling: 
+            c_indu = np.mean(c[self.u > self.steady_state_func(self.s)])
+            c_repr = np.mean(c[self.u < self.steady_state_func(self.s)])
+            if c_indu == np.nan or c_repr == np.nan:
+                self.low_quality = True
+                return
+            c0_r = np.mean(c[c >= np.min([c_indu, c_repr])])
 
         # initialize rates
         self.alpha_c = 0.1
@@ -1444,6 +1138,8 @@ class ChromatinDynamical:
                 for t_sw_1 in np.arange(1, 18, 4, dtype=np.float64): # 1,5,9,13,17
                     for t_sw_2 in np.arange(t_sw_1+1, 19, 4, dtype=np.float64): # 2,6,10,14,18
                         for t_sw_3 in np.arange(t_sw_2+1, 20, 4, dtype=np.float64): # 3,7,11,15,19
+                            if not self.fit_decoupling:
+                                t_sw_3 = t_sw_2 + 30 / self.n_anchors
                             params = np.array([t_sw_1, 
                                                t_sw_2-t_sw_1, 
                                                t_sw_3-t_sw_2, 
@@ -1455,9 +1151,11 @@ class ChromatinDynamical:
                                                self.rescale_c,
                                                self.rescale_u])
                             self.update(params, initialize=True, adjust_time=False, plot=False)
+                            if not self.fit_decoupling:
+                                break
 
             elif self.init_mode == 'simple':
-                t_sw_1, t_sw_2, t_sw_3 = 5, 10, 15
+                t_sw_1, t_sw_2, t_sw_3 = 5, 10, 15 if not self.fit_decoupling else 10.1
                 self.params = np.array([t_sw_1, 
                                         t_sw_2-t_sw_1, 
                                         t_sw_3-t_sw_2, 
@@ -1471,15 +1169,19 @@ class ChromatinDynamical:
 
             elif self.init_mode == 'invert':
                 self.alpha = u0_r / c_upper
+                if model_mismatch or not self.fit_decoupling:
+                    self.alpha = u0_r / c0_r
                 rna_interval = approx_tau(u0_r, s0_r, 0, 0, alpha, self.beta, self.gamma)
                 rna_interval = np.clip(rna_interval, 3, 12)
                 if self.model == 1:
                     for t_sw_1 in np.arange(1, rna_interval-1, 2, dtype=np.float64):
+                        t_sw_3 = rna_interval + t_sw_1
                         for t_sw_2 in np.arange(t_sw_1+1, rna_interval, 2, dtype=np.float64):
-                            t_sw_3 = rna_interval + t_sw_1
+                            if not self.fit_decoupling:
+                                t_sw_2 = t_sw_3 - 30 / self.n_anchors
+                                #c0_r = c_upper
 
                             alpha_c = -np.log(1 - c0_r) / t_sw_2
-
                             params = np.array([t_sw_1, 
                                                t_sw_2-t_sw_1, 
                                                t_sw_3-t_sw_2, 
@@ -1491,11 +1193,16 @@ class ChromatinDynamical:
                                                self.rescale_c, 
                                                self.rescale_u])
                             self.update(params, initialize=True, adjust_time=False, plot=False)
+                            if not self.fit_decoupling:
+                                break
 
                 elif self.model == 2:
                     for t_sw_1 in np.arange(1, rna_interval, 2, dtype=np.float64):
                         t_sw_2 = rna_interval + t_sw_1
                         for t_sw_3 in np.arange(t_sw_2+1, t_sw_2+6, 2, dtype=np.float64):
+                            if not self.fit_decoupling:
+                                t_sw_3 = t_sw_2 + 30 / self.n_anchors
+                                #c0_r = c_upper
 
                             alpha_c = -np.log(1 - c0_r) / t_sw_3
                             params = np.array([t_sw_1, 
@@ -1509,6 +1216,8 @@ class ChromatinDynamical:
                                                self.rescale_c, 
                                                self.rescale_u])
                             self.update(params, initialize=True, adjust_time=False, plot=False)
+                            if not self.fit_decoupling:
+                                break
 
         self.loss = [self.mse(self.params)]
         self.t_sw_array = np.array([self.params[0], 
@@ -1536,11 +1245,7 @@ class ChromatinDynamical:
         if not self.known_pars:
             self.fit_dyn()
 
-        if self.plot:
-            plt.ioff()
-            plt.show(block=True)
-
-        self.update(self.params, perform_update=True, fit_outlier=True, plot=False)
+        self.update(self.params, perform_update=True, fit_outlier=True, plot=True)
 
         # remove long gaps in the last observed state
         t_sorted = np.sort(self.t)
@@ -1568,7 +1273,11 @@ class ChromatinDynamical:
             self.params[3:7] = self.rates
             self.t_sw_array = np.array([self.params[0], self.params[0]+self.params[1], self.params[0]+self.params[1]+self.params[2]])
             self.t_sw_1, self.t_sw_2, self.t_sw_3 = self.t_sw_array
-            self.update(self.params, perform_update=True, fit_outlier=True, plot=False)
+            self.update(self.params, perform_update=True, fit_outlier=True, plot=True)
+
+        if self.plot:
+            plt.ioff()
+            plt.show(block=True)
 
         # likelihood
         if self.verbose >= 1:
@@ -1576,24 +1285,28 @@ class ChromatinDynamical:
         keep = self.non_zero & self.non_outlier & (self.u_all > 0.2 * np.percentile(self.u_all, 99.5)) & (self.s_all > 0.2 * np.percentile(self.s_all, 99.5))
         scale_factor = np.array([self.scale_c / self.std_c, self.scale_u / self.std_u, self.scale_s / self.std_s])
         if np.sum(keep) >= 10:
-            self.likelihood = compute_likelihood(self.c_all[keep], 
-                                                 self.u_all[keep], 
-                                                 self.s_all[keep], 
-                                                 self.t_sw_array, 
-                                                 self.alpha_c, 
-                                                 self.alpha, 
-                                                 self.beta, 
-                                                 self.gamma, 
-                                                 self.rescale_c,
-                                                 self.rescale_u,
-                                                 self.t[keep], 
-                                                 self.state[keep], 
-                                                 scale_cc=self.scale_cc, 
-                                                 scale_factor=scale_factor, 
-                                                 model=self.model, 
-                                                 rna_only=self.rna_only)
+            self.likelihood, self.l_c, self.ssd_c, self.var_c, l_u, l_s = compute_likelihood(self.c_all, 
+                                                                                             self.u_all, 
+                                                                                             self.s_all, 
+                                                                                             self.t_sw_array, 
+                                                                                             self.alpha_c, 
+                                                                                             self.alpha, 
+                                                                                             self.beta, 
+                                                                                             self.gamma, 
+                                                                                             self.rescale_c,
+                                                                                             self.rescale_u,
+                                                                                             self.t, 
+                                                                                             self.state, 
+                                                                                             scale_cc=self.scale_cc, 
+                                                                                             scale_factor=scale_factor, 
+                                                                                             model=self.model, 
+                                                                                             weight=keep, 
+                                                                                             rna_only=self.rna_only)
         else:
-            self.likelihood = 0
+            self.likelihood, self.l_c, self.ssd_c, self.var_c, l_u, l_s = 0, 0, 0, 0, 0, 0
+
+        if not self.rna_only and self.verbose >= 1:
+            print(f'likelihood of c: {self.l_c}, likelihood of u: {l_u}, likelihood of s: {l_s}')
 
         # velocity
         if self.verbose >= 1:
@@ -1613,18 +1326,18 @@ class ChromatinDynamical:
             new_time = self.t
             new_state = self.state
 
-        vc, vu, vs = velocity(new_time, 
-                              self.t_sw_array, 
-                              new_state, 
-                              self.alpha_c, 
-                              self.alpha, 
-                              self.beta, 
-                              self.gamma, 
-                              self.rescale_c,
-                              self.rescale_u,
-                              scale_cc=self.scale_cc, 
-                              model=self.model, 
-                              rna_only=self.rna_only)
+        vc, vu, vs = compute_velocity(new_time, 
+                                      self.t_sw_array, 
+                                      new_state, 
+                                      self.alpha_c, 
+                                      self.alpha, 
+                                      self.beta, 
+                                      self.gamma, 
+                                      self.rescale_c,
+                                      self.rescale_u,
+                                      scale_cc=self.scale_cc, 
+                                      model=self.model, 
+                                      rna_only=self.rna_only)
 
         self.velocity[:,0] = vc * self.scale_c
         self.velocity[:,1] = vu * self.scale_u
@@ -1653,18 +1366,18 @@ class ChromatinDynamical:
         c_sw = np.ravel(np.concatenate([exp_sw_list[x][:,0] for x in range(switch)]))
         u_sw = np.ravel(np.concatenate([exp_sw_list[x][:,1] for x in range(switch)]))
         s_sw = np.ravel(np.concatenate([exp_sw_list[x][:,2] for x in range(switch)]))
-        vc, vu, vs = velocity(anchor_time, 
-                              self.t_sw_array, 
-                              None, 
-                              self.alpha_c, 
-                              self.alpha, 
-                              self.beta, 
-                              self.gamma, 
-                              self.rescale_c,
-                              self.rescale_u,
-                              scale_cc=self.scale_cc, 
-                              model=self.model, 
-                              rna_only=self.rna_only)
+        vc, vu, vs = compute_velocity(anchor_time, 
+                                      self.t_sw_array, 
+                                      None, 
+                                      self.alpha_c, 
+                                      self.alpha, 
+                                      self.beta, 
+                                      self.gamma, 
+                                      self.rescale_c,
+                                      self.rescale_u,
+                                      scale_cc=self.scale_cc, 
+                                      model=self.model, 
+                                      rna_only=self.rna_only)
 
         # scale and shift back to original scale
         c_ = c * self.scale_c + self.offset_c
@@ -1895,7 +1608,11 @@ class ChromatinDynamical:
             scale_cc = np.clip(scale_cc, np.max([0.5*self.scale_cc, 0.25]), np.min([2*self.scale_cc, 4]))
 
         if not self.known_pars:
-            t3 = np.clip(t3, 0.1, None)
+            if self.fit_decoupling:
+                t3 = np.clip(t3, 0.1, None)
+            else:
+                t3[2] = 30 / self.n_anchors
+                t3[:2] = np.clip(t3[:2], 0.1, None)
             r4 = np.clip(r4, 0.001, 1000)
             rescale_c = np.clip(rescale_c, 0.75, 1.5)
             rescale_u = np.clip(rescale_u, 0.2, 3)
@@ -1916,7 +1633,8 @@ class ChromatinDynamical:
         # conditions for minimum switch time and rate params
         penalty = 0
         if any(t3 < 0.2) or any(r4 < 0.005):
-            penalty = np.sum(0.2 - t3[t3 < 0.2]) + np.sum(0.005 - r4[r4 < 0.005]) * 1e2
+            penalty = np.sum(0.2 - t3[t3 < 0.2]) if self.fit_decoupling else np.sum(0.2 - t3[:2][t3[:2] < 0.2])
+            penalty += np.sum(0.005 - r4[r4 < 0.005]) * 1e2
 
         #condition for all params
         if any(x > 500):
@@ -2045,6 +1763,9 @@ class ChromatinDynamical:
                 c = np.ravel(np.concatenate([exp_list[x][:,0] for x in range(switch+1)]))
                 u = np.ravel(np.concatenate([exp_list[x][:,1] for x in range(switch+1)]))
                 s = np.ravel(np.concatenate([exp_list[x][:,2] for x in range(switch+1)]))
+                c_ = self.c_all if fit_outlier else self.c
+                u_ = self.u_all if fit_outlier else self.u
+                s_ = self.s_all if fit_outlier else self.s
                 self.ax.clear()
                 plt.pause(0.1)
                 if self.rna_only:
@@ -2062,7 +1783,7 @@ class ChromatinDynamical:
                         self.ax.plot([s[-1]], [u[-1]], "*m", markersize=self.point_size, zorder=5)
                     for i in range(4):
                         if any(self.state == i):
-                            self.ax.scatter(self.s[(self.state == i)], self.u[(self.state == i)], s=self.point_size, c=self.color[i])
+                            self.ax.scatter(s_[(self.state == i)], u_[(self.state == i)], s=self.point_size, c=self.color[i])
                     self.ax.set_xlabel('s')
                     self.ax.set_ylabel('u')
 
@@ -2081,7 +1802,7 @@ class ChromatinDynamical:
                         self.ax.plot([s[-1]], [u[-1]], [c[-1]], "*m", markersize=self.point_size, zorder=5)
                     for i in range(4):
                         if any(self.state == i):
-                            self.ax.scatter(self.s[(self.state == i)], self.u[(self.state == i)], self.c[(self.state == i)], s=self.point_size, c=self.color[i])
+                            self.ax.scatter(s_[(self.state == i)], u_[(self.state == i)], c_[(self.state == i)], s=self.point_size, c=self.color[i])
                     self.ax.set_xlabel('s')
                     self.ax.set_ylabel('u')
                     self.ax.set_zlabel('c')
@@ -2146,7 +1867,7 @@ class ChromatinDynamical:
                 exp_t2 = self.anchor_t2_list[i] * scale_back + shift_back
                 ax.plot([exp_t1[2]], [exp_t1[1]], "|y", markersize=self.point_size*1.5)
                 ax.plot([exp_t2[2]], [exp_t2[1]], "|c", markersize=self.point_size*1.5)
-        ax.plot(s_all, self.steady_state_func(self.s_all * self.scale_s) + self.offset_u, c='grey', ls=':', lw=self.point_size/4, alpha=0.7)
+        ax.plot(s_all, self.steady_state_func(self.s_all) * self.scale_u + self.offset_u, c='grey', ls=':', lw=self.point_size/4, alpha=0.7)
         ax.set_xlabel('s')
         ax.set_ylabel('u')
         ax.set_title(f'{self.gene}-{self.model}')
@@ -2177,7 +1898,7 @@ class ChromatinDynamical:
                     exp_t2 = self.anchor_t2_list[i] * scale_back + shift_back
                     ax.plot([exp_t1[2]], [exp_t1[1]], "|y", markersize=self.point_size*1.5)
                     ax.plot([exp_t2[2]], [exp_t2[1]], "|c", markersize=self.point_size*1.5)
-            ax.plot(s_all, self.steady_state_func(self.s_all * self.scale_s) + self.offset_u, c='grey', ls=':', lw=self.point_size/4, alpha=0.7)
+            ax.plot(s_all, self.steady_state_func(self.s_all) * self.scale_u + self.offset_u, c='grey', ls=':', lw=self.point_size/4, alpha=0.7)
             ax.set_xlabel('s')
             ax.set_ylabel('u')
             ax.set_title(f'{self.gene}-{self.model}')
@@ -2256,7 +1977,7 @@ class ChromatinDynamical:
                 ax.plot([s_sw3], [u_sw3], "Dm", markersize=self.point_size, zorder=5)
             if np.max(self.t) == 20:
                 ax.plot([s[-1]], [u[-1]], "*m", markersize=self.point_size, zorder=5)
-            ax.plot(s_all, self.steady_state_func(self.s_all * self.scale_s) + self.offset_u, c='grey', ls=':', lw=self.point_size/4, alpha=0.7)
+            ax.plot(s_all, self.steady_state_func(self.s_all) * self.scale_u + self.offset_u, c='grey', ls=':', lw=self.point_size/4, alpha=0.7)
             ax.set_xlabel('s')
             ax.set_ylabel('u')
             ax.set_title(f'{self.gene}-{self.model}')
@@ -2314,8 +2035,8 @@ class ChromatinDynamical:
 
     def realign_time_and_velocity(self, c, u, s, anchor_time):
         # realign time to range (0,20)
-        self.anchor_min_idx = np.sum(anchor_time < np.min(self.t))
-        self.anchor_max_idx = np.sum(anchor_time < np.max(self.t)) - 1
+        self.anchor_min_idx = np.sum(anchor_time < (np.min(self.t)-1e-5))
+        self.anchor_max_idx = np.sum(anchor_time < (np.max(self.t)-1e-5))# - 1
         self.c0 = c[self.anchor_min_idx]
         self.u0 = u[self.anchor_min_idx]
         self.s0 = s[self.anchor_min_idx]
@@ -2364,7 +2085,7 @@ class ChromatinDynamical:
 
 
     def get_likelihood(self):
-        return self.likelihood
+        return self.likelihood, self.l_c, self.ssd_c, self.var_c
 
 
     def get_anchors(self):
@@ -2373,7 +2094,7 @@ class ChromatinDynamical:
         return self.anchor_exp, self.anchor_exp_sw, self.anchor_velo, self.anchor_min_idx, self.anchor_max_idx, self.anchor_velo_min_idx, self.anchor_velo_max_idx
 
 
-def regress_func(c,u,s,m,mi,im,gpdist,embed,conn,v,pl,sp,pdir,fa,gene,pa,di,ro,fit,extra,ru,alpha,beta,gamma,t_):
+def regress_func(c,u,s,m,mi,im,gpdist,embed,conn,v,pl,sp,pdir,fa,gene,pa,di,ro,fit,fd,extra,ru,alpha,beta,gamma,t_):
     if v >= 1 and m is not None:
         print('###############################################################################################')
         print(f'testing model {m}')
@@ -2386,7 +2107,7 @@ def regress_func(c,u,s,m,mi,im,gpdist,embed,conn,v,pl,sp,pdir,fa,gene,pa,di,ro,f
         if v >= 1:
             print(f'low quality gene {gene}, skipping')
         return (np.inf, np.nan, '', (np.zeros(3), np.zeros(4), 0, 0, 0, 0), np.zeros(3), np.zeros(len(u)), np.zeros(len(u)), 
-                np.zeros((len(u), 3)), -1, (np.zeros((1, 3)), np.zeros((1, 3)), np.zeros((1, 3)), 0, 0, 0, 0))
+                np.zeros((len(u), 3)), (-1.0, 0, 0, 0), (np.zeros((1, 3)), np.zeros((1, 3)), np.zeros((1, 3)), 0, 0, 0, 0))
 
     if gpdist is not None:
         subset_cells = s > 0.1 * np.percentile(s, 99)
@@ -2418,6 +2139,7 @@ def regress_func(c,u,s,m,mi,im,gpdist,embed,conn,v,pl,sp,pdir,fa,gene,pa,di,ro,f
                              partial=pa, 
                              direction=di, 
                              rna_only=ro, 
+                             fit_decoupling=fd, 
                              extra_color=extra, 
                              rescale_u=ru,
                              alpha=alpha,
@@ -2458,6 +2180,7 @@ def multimodel_helper(c, u, s,
                       direction, 
                       rna_only, 
                       fit, 
+                      fit_decoupling, 
                       extra_color, 
                       rescale_u, 
                       alpha, 
@@ -2490,6 +2213,7 @@ def multimodel_helper(c, u, s,
                                                                     direction, 
                                                                     rna_only, 
                                                                     fit, 
+                                                                    fit_decoupling, 
                                                                     extra_color, 
                                                                     rescale_u,
                                                                     alpha,
@@ -2531,6 +2255,7 @@ def recover_dynamics_chrom(adata_rna,
                            plot_dir=None,
                            rna_only=False, 
                            fit=True, 
+                           fit_decoupling=True, 
                            extra_color_key=None, 
                            embedding='X_umap', 
                            n_anchors=500, 
@@ -2566,9 +2291,9 @@ def recover_dynamics_chrom(adata_rna,
     max_iter: `int` (default: `5`)
         Iterations to run for parameter optimization.
     init_mode: `str` (default: `'invert'`)
-        Initialization method for switch times. 
-        `'invert'`: initial RNA switch time will be computed with scVelo time inversion method. 
-        `'grid'`: grid search the best set of switch times. 
+        Initialization method for switch times.
+        `'invert'`: initial RNA switch time will be computed with scVelo time inversion method.
+        `'grid'`: grid search the best set of switch times.
         `'simple'`: simply initialize switch times to be 5, 10, and 15.
     model_to_run: `int` or list of `int` (default: `None`)
         User specified models for each genes. Possible values are 1 are 2. If `None`, the model 
@@ -2590,6 +2315,8 @@ def recover_dynamics_chrom(adata_rna,
         Whether to only use RNA for fitting (RNA velocity).
     fit: `bool` (default: `True`)
         Whether to fit the models. If False, only pre-determination and initialization will be run.
+    fit_decoupling: `bool` (default: `True`)
+        Whether to fit decoupling phase (Model 1 vs Model 2 distinction).
     n_anchors: `int` (default: 500)
         Number of anchor time-points to generate as a representation of the trajectory.
     k_dist: `int` (default: 1)
@@ -2658,6 +2385,8 @@ def recover_dynamics_chrom(adata_rna,
         loss of model fit
     fit_likelihood: `.var`
         likelihood of model fit
+    fit_likelihood_c: `.var`
+        likelihood of chromatin fit
     fit_anchor_c, fit_anchor_u, fit_anchor_s: `.varm`
         anchor expressions
     fit_anchor_c_sw, fit_anchor_u_sw, fit_anchor_s_sw: `.varm`
@@ -2676,8 +2405,8 @@ def recover_dynamics_chrom(adata_rna,
         inferred gene time
     fit_state: `.layers`
         inferred state assignments
-    velo_chrom, velo_u, velo_s: `.layers`
-        velocities in chromatin, unspliced, and spliced space.
+    velo_s, velo_u, velo_chrom: `.layers`
+        velocities in spliced, unspliced, and chromatin space
     velo_s_genes, velo_u_genes, velo_chrom_genes: `.var`
         velocity genes
     velo_s_params, velo_u_params, velo_chrom_params: `.var`
@@ -2689,6 +2418,7 @@ def recover_dynamics_chrom(adata_rna,
     fit_args = {}
     fit_args['max_iter'] = max_iter
     fit_args['init_mode'] = init_mode
+    fit_args['fit_decoupling'] = fit_decoupling
     fit_args['t'] = n_anchors
     fit_args['k'] = k_dist
     fit_args['thresh_multiplier'] = thresh_multiplier
@@ -2704,7 +2434,7 @@ def recover_dynamics_chrom(adata_rna,
         import anndata as ad
         from scipy.sparse import diags
         rna_only = True
-        adata_atac = anndata.AnnData(X=np.ones(adata_rna.shape), obs=adata_rna.obs, var=adata_rna.var)
+        adata_atac = ad.AnnData(X=np.ones(adata_rna.shape), obs=adata_rna.obs, var=adata_rna.var)
         adata_atac.layers['Mc'] = np.ones(adata_rna.shape)
     if adata_rna.shape != adata_atac.shape:
         raise ValueError(f'Shape of RNA and ATAC adata objects do not match: {adata_rna.shape} {adata_atac.shape}')
@@ -2724,12 +2454,12 @@ def recover_dynamics_chrom(adata_rna,
         extra_color = adata_atac.obs[extra_color_key].cat.rename_categories(adata_atac.uns[extra_color_key+'_colors'][:ngroups]).to_numpy()
     else:
         raise ValueError('Currently, extra_color_key must be a single string of categories and available in adata obs, and its colors can be found in adata uns')
-    if 'connectivities' not in adata_rna.obsp.keys() or np.min((adata_rna.obsp['connectivities'] > 0).sum(1).A) > k_dist:
-        neighbors = sc.Neighbors(adata_rna)
+    if 'connectivities' not in adata_rna.obsp.keys() or (adata_rna.obsp['connectivities'] > 0).sum(1).min() > (n_neighbors-1):
+        neighbors = Neighbors(adata_rna)
         neighbors.compute_neighbors(n_neighbors=n_neighbors, knn=True, n_pcs=n_pcs)
         rna_conn = neighbors.connectivities
     else:
-        rna_conn = adata2.obsp['connectivities'].copy()
+        rna_conn = adata_rna.obsp['connectivities'].copy()
     #rna_conn = top_n_sparse(rna_conn, n_neighbors)
     rna_conn.setdiag(1)
     rna_conn = rna_conn.multiply(1.0 / rna_conn.sum(1)).tocsr()
@@ -2770,6 +2500,7 @@ def recover_dynamics_chrom(adata_rna,
         verbose = 1
     if verbose >= 1:
         print(f'{gn} genes will be fitted')
+
     models = np.zeros(gn)
     t_sws = np.zeros((gn, 3))
     rates = np.zeros((gn, 4))
@@ -2785,6 +2516,9 @@ def recover_dynamics_chrom(adata_rna,
     velo_u = np.zeros((adata_rna.n_obs, gn))
     velo_s = np.zeros((adata_rna.n_obs, gn))
     likelihoods = np.zeros(gn)
+    l_cs = np.zeros(gn)
+    ssd_cs = np.zeros(gn)
+    var_cs = np.zeros(gn)
     directions = []
     anchor_c = np.zeros((n_anchors, gn))
     anchor_u = np.zeros((n_anchors, gn))
@@ -2927,6 +2661,7 @@ def recover_dynamics_chrom(adata_rna,
                     direction[i] if d_per_g else direction, 
                     rna_only, 
                     fit, 
+                    fit_decoupling, 
                     extra_color, 
                     ru[i] if isinstance(ru, (list, np.ndarray)) else ru,
                     alpha[i] if isinstance(alpha, (list, np.ndarray)) else alpha,
@@ -2939,6 +2674,7 @@ def recover_dynamics_chrom(adata_rna,
                 (loss, model, direct_out, parameters, initial_exp, 
                  time, state, velocity, likelihood, anchors) = r
                 t_sw, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
+                likelihood, l_c, ssd_c, var_c = likelihood
                 losses[i,:] = loss
                 models[i] = model
                 directions.append(direct_out)
@@ -2949,6 +2685,9 @@ def recover_dynamics_chrom(adata_rna,
                 rescale_us[i] = rescale_u
                 realign_ratios[i] = realign_ratio
                 likelihoods[i] = likelihood
+                l_cs[i] = l_c
+                ssd_cs[i] = ssd_c
+                var_cs[i] = var_c
                 if fit:
                     initial_exps[i,:] = initial_exp
                     times[:,i] = time
@@ -3000,6 +2739,7 @@ def recover_dynamics_chrom(adata_rna,
                                                                         direction[i] if d_per_g else direction, 
                                                                         rna_only, 
                                                                         fit, 
+                                                                        fit_decoupling, 
                                                                         extra_color, 
                                                                         ru[i] if isinstance(ru, (list, np.ndarray)) else ru,
                                                                         alpha[i] if isinstance(alpha, (list, np.ndarray)) else alpha,
@@ -3007,6 +2747,7 @@ def recover_dynamics_chrom(adata_rna,
                                                                         gamma[i] if isinstance(gamma, (list, np.ndarray)) else gamma,
                                                                         t_[i] if isinstance(t_, (list, np.ndarray)) else t_)
             t_sw, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
+            likelihood, l_c, ssd_c, var_c = likelihood
             losses[i,:] = loss
             models[i] = model
             directions.append(direct_out)
@@ -3017,6 +2758,9 @@ def recover_dynamics_chrom(adata_rna,
             rescale_us[i] = rescale_u
             realign_ratios[i] = realign_ratio
             likelihoods[i] = likelihood
+            l_cs[i] = l_c
+            ssd_cs[i] = ssd_c
+            var_cs[i] = var_c
             if fit:
                 initial_exps[i,:] = initial_exp
                 times[:,i] = time
@@ -3068,6 +2812,9 @@ def recover_dynamics_chrom(adata_rna,
     else:
         adata_copy.var['fit_loss'] = losses[filt,0]
     adata_copy.var['fit_likelihood'] = likelihoods[filt]
+    adata_copy.var['fit_likelihood_c'] = l_cs[filt]
+    adata_copy.var['fit_ssd_c'] = ssd_cs[filt]
+    adata_copy.var['fit_var_c'] = var_cs[filt]
     if fit:
         adata_copy.layers['fit_t'] = times[:,filt]
         adata_copy.layers['fit_state'] = states[:,filt]
@@ -3111,6 +2858,27 @@ def smooth_scale(conn, vector):
     min_from = np.min(v)
     res = ((v - min_from) * (max_to - min_to) / (max_from - min_from)) + min_to
     return res
+
+
+def top_n_sparse(conn, n):
+    conn_ll = conn.tolil()
+    for i in range(conn_ll.shape[0]):
+        row_data = np.array(conn_ll.data[i])
+        row_idx = np.array(conn_ll.rows[i])
+        new_idx = row_data.argsort()[-n:]
+        top_val = row_data[new_idx]
+        top_idx = row_idx[new_idx]
+        conn_ll.data[i] = top_val.tolist()
+        conn_ll.rows[i] = top_idx.tolist()
+    conn = conn_ll.tocsr()
+    idx1 = conn > 0
+    idx2 = conn > 0.25
+    idx3 = conn > 0.5
+    conn[idx1] = 0.25
+    conn[idx2] = 0.5
+    conn[idx3] = 1
+    conn.eliminate_zeros()
+    return conn
 
 
 def set_velocity_genes(adata, 
@@ -3324,6 +3092,56 @@ def latent_time(adata, vkey='velo_s', **kwargs):
     if vkey+'_norm_graph' not in adata.uns.keys():
         velocity_graph(adata, vkey=vkey, **kwargs)
     scv.tl.latent_time(adata, vkey=vkey+'_norm', **kwargs)
+
+
+def LRT_decoupling(adata_rna, adata_atac, **kwargs):
+    """Computes likelihood ratio test for decoupling state.
+
+    This function computes whether keeping decoupling state improves fit Likelihood.
+
+    Parameters
+    ----------
+    adata_rna: :class:`~anndata.AnnData`
+        RNA anndata object
+    adata_atac: :class:`~anndata.AnnData`
+        ATAC anndata object.
+    Additional parameters passed to `recover_dynamics_chrom`.
+
+    Returns
+    -------
+    adata_result_w_decoupled: class:`~anndata.AnnData`
+        fit result with decoupling state
+    adata_result_w_decoupled: class:`~anndata.AnnData`
+        fit result without decoupling state
+    res: `pandas.DataFrame`
+        LRT statistics
+    """
+    from scipy.stats.distributions import chi2
+    print('fitting models with decoupling intervals')
+    adata_result_w_decoupled = recover_dynamics_chrom(adata_rna, adata_atac, fit_decoupling=True, **kwargs)
+    print('fitting models without decoupling intervals')
+    adata_result_wo_decoupled = recover_dynamics_chrom(adata_rna, adata_atac, fit_decoupling=False, **kwargs)
+    print('testing likelihood ratio')
+    shared_genes = pd.Index(np.intersect1d(adata_result_w_decoupled.var_names, adata_result_wo_decoupled.var_names))
+    l_c_w_decoupled = adata_result_w_decoupled[:,shared_genes].var['fit_likelihood_c'].values
+    l_c_wo_decoupled = adata_result_wo_decoupled[:,shared_genes].var['fit_likelihood_c'].values
+    n_obs = adata_rna.n_obs
+    LRT_c = -2 * n_obs * (np.log(l_c_wo_decoupled) - np.log(l_c_w_decoupled))
+    p_c = chi2.sf(LRT_c, 1)
+    l_w_decoupled = adata_result_w_decoupled[:,shared_genes].var['fit_likelihood'].values
+    l_wo_decoupled = adata_result_wo_decoupled[:,shared_genes].var['fit_likelihood'].values
+    LRT = -2 * n_obs * (np.log(l_wo_decoupled) - np.log(l_w_decoupled))
+    p = chi2.sf(LRT, 1)
+    res = pd.DataFrame({'likelihood_c_w_decoupled':l_c_w_decoupled, 
+                        'likelihood_c_wo_decoupled':l_c_wo_decoupled, 
+                        'LRT_c': LRT_c, 
+                        'pval_c': p_c, 
+                        'likelihood_w_decoupled':l_w_decoupled, 
+                        'likelihood_wo_decoupled':l_wo_decoupled, 
+                        'LRT': LRT, 
+                        'pval': p, 
+                        }, index=shared_genes)
+    return adata_result_w_decoupled, adata_result_wo_decoupled, res
 
 
 def transition_matrix_s(s_mat, velo_s, knn):
@@ -3891,24 +3709,26 @@ def scatter_plot(adata,
                 vu = adata[:,gene].layers['velo_u'].copy()
             elif 'velocity_u' in adata.layers.keys():
                 vu = adata[:,gene].layers['velocity_u'].copy()
-            max_u = np.max(u)
+            else:
+                vu = np.zeros(adata.n_obs)
+            max_u = np.max([np.max(u), 1e-6])
             u /= max_u
             vu = np.ravel(vu)
-            vu /= np.max(np.abs(vu))
+            vu /= np.max([np.max(np.abs(vu)), 1e-6])
             if 'velo_s' in adata.layers.keys():
                 vs = adata[:,gene].layers['velo_s'].copy()
             elif 'velocity' in adata.layers.keys():
                 vs = adata[:,gene].layers['velocity'].copy()
-            max_s = np.max(s)
+            max_s = np.max([np.max(s), 1e-6])
             s /= max_s
             vs = np.ravel(vs)
-            vs /= np.max(np.abs(vs))
+            vs /= np.max([np.max(np.abs(vs)), 1e-6])
             if 'velo_chrom' in adata.layers.keys():
                 vc = adata[:,gene].layers['velo_chrom'].copy()
-                max_c = np.max(c)
+                max_c = np.max([np.max(c), 1e-6])
                 c /= max_c
                 vc = np.ravel(vc)
-                vc /= np.max(np.abs(vc))
+                vc /= np.max([np.max(np.abs(vc)), 1e-6])
 
         row = count // n_cols
         col = count % n_cols
@@ -4106,356 +3926,3 @@ def scatter_plot(adata,
     for i in range(col+1, n_cols):
         fig.delaxes(axs[row, i])
     fig.tight_layout()
-
-
-def ellipse_fit(adata, 
-                genes, 
-                color_by='quantile', 
-                n_cols=8, 
-                title=None, 
-                figsize=None, 
-                axis_on=False,
-                pointsize=2, 
-                linewidth=2
-                ):
-    """Fit ellipses to unspliced and spliced phase portraits.
-
-    This function plots the ellipse fits on the unspliced-spliced phase portraits.
-
-    Parameters
-    ----------
-    adata: :class:`~anndata.AnnData`
-        RNA anndata object. Required fields: `Mu` and `Ms`.
-    genes: `str`,  list of `str`
-        List of genes to plot.
-    color_by: `str` (default: `quantile`)
-        Color by the four quantiles based on ellipse fit if `quantile`. Other common values are leiden, louvain, celltype, etc.
-        If not `quantile`, the color field must be present in `.uns`, which can be pre-computed with `scanpy.pl.scatter`.
-        For `quantile`, red, orange, green, and blue represent quantile left, top, right, and bottom, respectively.
-        If `quantile_scores`, `multivelo.compute_quantile_scores` function must have been run.
-    n_cols: `int` (default: 8)
-        Number of columns to plot on each row.
-    figsize: `tuple` (default: `None`)
-        Total figure size.
-    title: `tuple` (default: `None`)
-        Title of the figure. Default is `Ellipse Fit`.
-    axis_on: `bool` (default: `False`)
-        Whether to show axis labels.
-    pointsize: `float` (default: 2)
-        Point size for scatter plots.
-    linewidth: `float` (default: 2)
-        Line width for ellipse.
-    """
-    by_quantile = color_by == 'quantile'
-    by_quantile_score = color_by == 'quantile_scores'
-    if not by_quantile and not by_quantile_score:
-        types = adata.obs[color_by].cat.categories
-        colors = adata.uns[f'{color_by}_colors']
-    gn = len(genes)
-    if gn < n_cols:
-        n_cols = gn
-    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, figsize=(2 * n_cols, 2.4 * (-(-gn // n_cols))) if figsize is None else figsize)
-    count = 0
-    for gene in genes:
-        u = np.array(adata[:,gene].layers['Mu'])
-        s = np.array(adata[:,gene].layers['Ms'])
-        row = count // n_cols
-        col = count % n_cols
-        non_zero = (u>0) & (s>0)
-        if np.sum(non_zero) < 10:
-            count += 1
-            fig.delaxes(axs[row, col])
-            continue
-
-        mean_u, mean_s = np.mean(u[non_zero]), np.mean(s[non_zero])
-        std_u, std_s = np.std(u[non_zero]), np.std(s[non_zero])
-        u_ = (u - mean_u)/std_u
-        s_ = (s - mean_s)/std_s
-        X = np.reshape(s_[non_zero], (-1,1))
-        Y = np.reshape(u_[non_zero], (-1,1))
-
-        # Ax^2 + Bxy + Cy^2 + Dx + Ey + 1 = 0
-        A = np.hstack([X**2, X * Y, Y**2, X, Y])
-        b = -np.ones_like(X)
-        x,res,_,_ = np.linalg.lstsq(A, b)
-        x = x.squeeze()
-        A,B,C,D,E = x
-        good_fit = B**2 - 4*A*C < 0
-        theta = np.arctan(B/(A - C))/2 if x[0] > x[2] else np.pi/2 + np.arctan(B/(A - C))/2
-        good_fit = good_fit & (theta < np.pi/2) & (theta > 0)
-        if not good_fit:
-            count += 1
-            fig.delaxes(axs[row, col])
-            continue
-        x_coord = np.linspace((-mean_s)/std_s, (np.max(s)-mean_s)/std_s, 500)
-        y_coord = np.linspace((-mean_u)/std_u, (np.max(u)-mean_u)/std_u, 500)
-        X_coord, Y_coord = np.meshgrid(x_coord, y_coord)
-        Z_coord = A * X_coord**2 + B * X_coord * Y_coord + C * Y_coord**2 + D * X_coord + E * Y_coord + 1
-
-        M0 = np.array([
-             A, B/2, D/2,
-             B/2, C, E/2,
-             D/2, E/2, 1,
-        ]).reshape(3, 3)
-        M = np.array([
-            A, B/2,
-            B/2, C,
-        ]).reshape(2, 2)
-        l1, l2 = np.sort(np.linalg.eigvals(M))
-        xc = (B*E - 2*C*D)/(4*A*C - B**2)
-        yc = (B*D - 2*A*E)/(4*A*C - B**2)
-        slope_major = np.tan(theta)
-        theta2 = np.pi/2 + theta
-        slope_minor = np.tan(theta2)
-        a = np.sqrt(-np.linalg.det(M0)/np.linalg.det(M)/l2)
-        b = np.sqrt(-np.linalg.det(M0)/np.linalg.det(M)/l1)
-        xtop = xc + a*np.cos(theta)
-        ytop = yc + a*np.sin(theta)
-        xbot = xc - a*np.cos(theta)
-        ybot = yc - a*np.sin(theta)
-        xtop2 = xc + b*np.cos(theta2)
-        ytop2 = yc + b*np.sin(theta2)
-        xbot2 = xc - b*np.cos(theta2)
-        ybot2 = yc - b*np.sin(theta2)
-        mse = res[0] / np.sum(non_zero)
-        major = lambda x,y : (y - yc) - (slope_major * (x - xc))
-        minor = lambda x,y : (y - yc) - (slope_minor * (x - xc))
-        quant1 = (major(s_,u_) > 0) & (minor(s_,u_) < 0)
-        quant2 = (major(s_,u_) > 0) & (minor(s_,u_) > 0)
-        quant3 = (major(s_,u_) < 0) & (minor(s_,u_) > 0)
-        quant4 = (major(s_,u_) < 0) & (minor(s_,u_) < 0)
-        if (np.sum(quant1 | quant4) < 10) or (np.sum(quant2 | quant3) < 10):
-            count += 1
-            continue
-
-        if by_quantile:
-            axs[row, col].scatter(s_[quant1], u_[quant1], s=pointsize, c='tab:red', alpha=0.6)
-            axs[row, col].scatter(s_[quant2], u_[quant2], s=pointsize, c='tab:orange', alpha=0.6)
-            axs[row, col].scatter(s_[quant3], u_[quant3], s=pointsize, c='tab:green', alpha=0.6)
-            axs[row, col].scatter(s_[quant4], u_[quant4], s=pointsize, c='tab:blue', alpha=0.6)
-        elif by_quantile_score:
-            if 'quantile_scores' not in adata.layers:
-                raise ValueError('Please run multivelo.compute_quantile_scores first to compute quantile scores.')
-            axs[row, col].scatter(s_, u_, s=pointsize, c=adata[:,gene].layers['quantile_scores'], cmap='RdBu_r', alpha=0.7)
-        else:
-            for i in range(len(types)):
-                filt = adata.obs[color_by] == types[i]
-                axs[row, col].scatter(s_[filt], u_[filt], s=pointsize, c=colors[i], alpha=0.7)
-        axs[row, col].contour(X_coord, Y_coord, Z_coord, levels=[0], colors=('r'), linewidths=linewidth, alpha=0.7)
-        axs[row, col].scatter([xc], [yc], c='black', s=5, zorder=2)
-        axs[row, col].scatter([0], [0], c='black', s=5, zorder=2)
-        axs[row, col].plot([xtop, xbot], [ytop, ybot], color='b', linestyle='dashed', linewidth=linewidth, alpha=0.7)
-        axs[row, col].plot([xtop2, xbot2], [ytop2, ybot2], color='g', linestyle='dashed', linewidth=linewidth, alpha=0.7)
-
-        axs[row, col].set_title(f'{gene} {mse:.3g}')
-        axs[row, col].set_xlabel('s')
-        axs[row, col].set_ylabel('u')
-        common_range = [np.min([(-mean_s)/std_s, (-mean_u)/std_u])-(0.05*np.max(s)/std_s), np.max([(np.max(s)-mean_s)/std_s, (np.max(u)-mean_u)/std_u])+(0.05*np.max(s)/std_s)]
-        axs[row, col].set_xlim(common_range)
-        axs[row, col].set_ylim(common_range)
-        if not axis_on:
-            axs[row, col].xaxis.set_ticks_position('none')
-            axs[row, col].yaxis.set_ticks_position('none')
-            axs[row, col].get_xaxis().set_visible(False)
-            axs[row, col].get_yaxis().set_visible(False)
-            axs[row, col].xaxis.set_ticks_position('none')
-            axs[row, col].yaxis.set_ticks_position('none')
-            axs[row, col].set_frame_on(False)
-        count += 1
-
-    for i in range(col+1, n_cols):
-        fig.delaxes(axs[row, i])
-    if title is not None:
-        fig.suptitle(title, fontsize=15)
-    else:
-        fig.suptitle('Ellipse Fit', fontsize=15)
-    fig.tight_layout(rect=[0, 0.1, 1, 0.98])
-
-
-def compute_quantile_scores(adata, 
-                            verbose=True, 
-                            n_pcs=30, 
-                            n_neighbors=30
-                            ):
-    """Fit ellipses to unspliced and spliced phase portraits and compute quantile scores.
-
-    This function fit ellipses to unspliced-spliced phase portraits. The cells are split into
-    four groups (quantiles) based on the axes of the ellipse. Then the function assigns each 
-    quantile a score: -3 for left, -1 for top, 1 for right, and 3 for bottom. These gene-specific
-    values are smoothed with a connectivities matirx. This is similar to the RNA velocity
-    gene time assignment.
-
-    In addition, a 2-bit tuple is assigned to each of the four quantiles, (0,0) for left,
-    (1,0) for top, (1,1) for right, and (0,1) for bottom. This is to mimic the distance 
-    relationship between quantiles.
-
-    Parameters
-    ----------
-    adata: :class:`~anndata.AnnData`
-        RNA anndata object. Required fields: `Mu` and `Ms`.
-    verbose: `bool` (default: `True`)
-        Print the number of good ellipse fit based on some criteria.
-    n_pcs: `int` (default: 30)
-        Number of principal components to compute connectivities.
-    n_neighbors: `int` (default: 30)
-        Number of nearest neighbors to compute connectivities.
-
-    Returns
-    -------
-    quantile_scores: `.layers`
-        gene-specific quantile scores
-    quantile_scores_1st_bit, quantile_scores_2nd_bit: `.layers`
-        2-bit assignment for gene quantiles
-    quantile_score_sum: `.obs`
-        aggreagted quantile scores
-    quantile_genes: `.var`
-        genes with good quantilty ellipse fits
-    """
-    neighbors = sc.Neighbors(adata)
-    neighbors.compute_neighbors(n_neighbors=n_neighbors, knn=True, n_pcs=n_pcs)
-    conn = neighbors.connectivities
-    conn.setdiag(1)
-    conn_norm = conn.multiply(1.0 / conn.sum(1)).tocsr()
-
-    quantile_scores = np.zeros(adata.shape)
-    quantile_scores_2bit = np.zeros((adata.shape[0], adata.shape[1], 2))
-    quantile_gene = np.full(adata.n_vars, False)
-    quality_gene_idx = []
-    for idx,gene in enumerate(adata.var_names):
-        u = np.array(adata[:,gene].layers['Mu'])
-        s = np.array(adata[:,gene].layers['Ms'])
-        non_zero = (u>0) & (s>0)
-        if np.sum(non_zero) < 10:
-            continue
-
-        mean_u, mean_s = np.mean(u[non_zero]), np.mean(s[non_zero])
-        std_u, std_s = np.std(u[non_zero]), np.std(s[non_zero])
-        u_ = (u - mean_u)/std_u
-        s_ = (s - mean_s)/std_s
-        X = np.reshape(s_[non_zero], (-1,1))
-        Y = np.reshape(u_[non_zero], (-1,1))
-
-        # Ax^2 + Bxy + Cy^2 + Dx + Ey + 1 = 0
-        A = np.hstack([X**2, X * Y, Y**2, X, Y])
-        b = -np.ones_like(X)
-        x,res,_,_ = np.linalg.lstsq(A, b)
-        x = x.squeeze()
-        A,B,C,D,E = x
-        good_fit = B**2 - 4*A*C < 0
-        theta = np.arctan(B/(A - C))/2 if x[0] > x[2] else np.pi/2 + np.arctan(B/(A - C))/2
-        good_fit = good_fit & (theta < np.pi/2) & (theta > 0)
-        if not good_fit:
-            continue
-
-        x_coord = np.linspace((-mean_s)/std_s, (np.max(s)-mean_s)/std_s, 500)
-        y_coord = np.linspace((-mean_u)/std_u, (np.max(u)-mean_u)/std_u, 500)
-        X_coord, Y_coord = np.meshgrid(x_coord, y_coord)
-        Z_coord = A * X_coord**2 + B * X_coord * Y_coord + C * Y_coord**2 + D * X_coord + E * Y_coord + 1
-        M0 = np.array([
-             A, B/2, D/2,
-             B/2, C, E/2,
-             D/2, E/2, 1,
-        ]).reshape(3, 3)
-        M = np.array([
-            A, B/2,
-            B/2, C,
-        ]).reshape(2, 2)
-        l1, l2 = np.sort(np.linalg.eigvals(M))
-        xc = (B*E - 2*C*D)/(4*A*C - B**2)
-        yc = (B*D - 2*A*E)/(4*A*C - B**2)
-        slope_major = np.tan(theta)
-        theta2 = np.pi/2 + theta
-        slope_minor = np.tan(theta2)
-        major = lambda x,y : (y - yc) - (slope_major * (x - xc))
-        minor = lambda x,y : (y - yc) - (slope_minor * (x - xc))
-
-        quant1 = (major(s_,u_) > 0) & (minor(s_,u_) < 0)
-        quant2 = (major(s_,u_) > 0) & (minor(s_,u_) > 0)
-        quant3 = (major(s_,u_) < 0) & (minor(s_,u_) > 0)
-        quant4 = (major(s_,u_) < 0) & (minor(s_,u_) < 0)
-        if (np.sum(quant1 | quant4) < 10) or (np.sum(quant2 | quant3) < 10):
-            continue
-
-        quantile_scores[:,idx:idx+1] = (-3.) * quant1 + (-1.) * quant2 + 1. * quant3 + 3. * quant4
-        quantile_scores_2bit[:,idx:idx+1,0] = 1. * (quant1 | quant2)
-        quantile_scores_2bit[:,idx:idx+1,1] = 1. * (quant2 | quant3)
-        quality_gene_idx.append(idx)
-
-    quantile_scores = csr_matrix.dot(conn_norm, quantile_scores)
-    quantile_scores_2bit[:,:,0] = csr_matrix.dot(conn_norm, quantile_scores_2bit[:,:,0])
-    quantile_scores_2bit[:,:,1] = csr_matrix.dot(conn_norm, quantile_scores_2bit[:,:,1])
-    adata.layers['quantile_scores'] = quantile_scores
-    adata.layers['quantile_scores_1st_bit'] = quantile_scores_2bit[:,:,0]
-    adata.layers['quantile_scores_2nd_bit'] = quantile_scores_2bit[:,:,1]
-    quantile_gene[quality_gene_idx] = True
-
-    if verbose:
-        perc_good = np.sum(quantile_gene) / adata.n_vars * 100
-        print(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}% genes have good ellipse fits')
-
-    adata.obs['quantile_score_sum'] = np.sum(adata[:,quantile_gene].layers['quantile_scores'], axis=1)
-    adata.var['quantile_genes'] = quantile_gene
-
-
-def cluster_by_quantile(adata, 
-                        plot=False, 
-                        n_clusters=None, 
-                        affinity='euclidean', 
-                        linkage='ward'
-                        ):
-    """Cluster genes based on 2-bit quantile scores.
-
-    This function cluster similar genes based on their 2-bit quantile score assignments from ellipse fit.
-    Hierarchical cluster is done with `sklean.cluster.AgglomerativeClustering`.
-
-    Parameters
-    ----------
-    adata: :class:`~anndata.AnnData`
-        RNA anndata object. Required fields: `Mu` and `Ms`.
-    plot: `bool` (default: `False`)
-        Plot the hierarchical clusters.
-    n_clusters: `int` (default: None)
-        The number of clusters to keep.
-    affinity: `str` (default: `euclidean`)
-        Metric used to compute linkage. Passed to `sklean.cluster.AgglomerativeClustering`.
-    linkage: `str` (default: `ward`)
-        Linkage criterion to use. Passed to `sklean.cluster.AgglomerativeClustering`.
-
-    Returns
-    -------
-    quantile_cluster: `.var`
-        cluster assignments of genes based on quantiles
-    """
-    from sklearn.cluster import AgglomerativeClustering
-    if 'quantile_scores_1st_bit' not in adata.layers.keys():
-        raise ValueError("Quantile scores not found. Please run compute_quantile_scores function first.")
-    quantile_gene = adata.var['quantile_genes']
-    if plot or n_clusters is None:
-        cluster = AgglomerativeClustering(distance_threshold=0, n_clusters=None, affinity=affinity, linkage=linkage)
-        cluster = cluster.fit(np.vstack((adata[:,quantile_gene].layers['quantile_scores_1st_bit'], adata[:,quantile_gene].layers['quantile_scores_2nd_bit'])).transpose())
-
-        # https://scikit-learn.org/stable/auto_examples/cluster/plot_agglomerative_dendrogram.html
-        def plot_dendrogram(model, **kwargs):
-            from scipy.cluster.hierarchy import dendrogram
-            counts = np.zeros(model.children_.shape[0])
-            n_samples = len(model.labels_)
-            for i, merge in enumerate(model.children_):
-                current_count = 0
-                for child_idx in merge:
-                    if child_idx < n_samples:
-                        current_count += 1
-                    else:
-                        current_count += counts[child_idx - n_samples]
-                counts[i] = current_count
-            linkage_matrix = np.column_stack([model.children_, model.distances_, counts]).astype(float)
-            dendrogram(linkage_matrix, **kwargs)
-
-        plot_dendrogram(cluster, truncate_mode='level', p=5, no_labels=True)
-
-    if n_clusters is not None:
-        n_clusters = int(n_clusters)
-        cluster = AgglomerativeClustering(n_clusters=n_clusters, affinity=affinity, linkage=linkage)
-        cluster = cluster.fit_predict(np.vstack((adata[:,quantile_gene].layers['quantile_scores_1st_bit'], adata[:,quantile_gene].layers['quantile_scores_2nd_bit'])).transpose())
-        quantile_cluster = np.full(adata.n_vars, -1)
-        quantile_cluster[quantile_gene] = cluster
-        adata.var['quantile_cluster'] = quantile_cluster
