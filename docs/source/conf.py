@@ -3,9 +3,16 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
+from sphinx.ext import autosummary
 
 import matplotlib
 matplotlib.use('agg')
+
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE.parent.parent))
+sys.path.insert(0, os.path.abspath("_ext"))
+
+import multivelo
 
 # -- Project information
 
@@ -14,7 +21,7 @@ copyright = f'{datetime.now():%Y}, Welch Lab'
 author = 'Chen Li'
 
 release = '0.1'
-version = '0.1.1'
+version = '0.1.0'
 
 # -- General configuration
 
