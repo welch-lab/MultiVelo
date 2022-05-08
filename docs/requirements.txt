@@ -1,4 +1,4 @@
-scanpy
+multivelo
 setuptools
 setuptools_scm
 typing_extensions

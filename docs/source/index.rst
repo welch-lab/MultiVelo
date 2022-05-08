@@ -1,4 +1,4 @@
-|PyPI| |PyPIDownloads| |Docs|
+|Stars| |PyPI| |PyPIDownloads| |Docs|
 
 MultiVelo - Velocity Inference from Single-Cell Multi-Omic Data
 ===============================================================
@@ -26,6 +26,10 @@ Contents
 
    usage
    api
+
+
+.. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow
+   :target: https://github.com/welch-lab/multivelo/stargazers
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/multivelo.svg
    :target: https://pypi.org/project/multivelo
