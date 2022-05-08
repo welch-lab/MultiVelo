@@ -12,6 +12,9 @@ To use MultiVelo, first install it using pip:
 
    $ pip install multivelo
 
+Demo
+----
+
 A tutorial showing how to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_.
 
 We use the embryonic E18 mouse brain from 10X Multiome as an example (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_).

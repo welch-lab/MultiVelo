@@ -26,3 +26,12 @@ Contents
 
    usage
    api
+
+.. |PyPI| image:: https://img.shields.io/pypi/v/multivelo.svg
+   :target: https://pypi.org/project/multivelo
+
+.. |PyPIDownloads| image:: https://pepy.tech/badge/multivelo
+   :target: https://pepy.tech/project/multivelo
+
+.. |Docs| image:: https://readthedocs.org/projects/multivelo/badge/?version=latest
+   :target: https://multivelo.readthedocs.io
