@@ -10,7 +10,6 @@ matplotlib.use('agg')
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parent)+'/multivelo_demo')
 
 import multivelo
 
@@ -34,7 +33,8 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon',
     'sphinx.ext.githubpages',
-    'nbsphinx'
+    'nbsphinx',
+    'nbsphinx-link'
 ]
 
 autosummary_generate = True
