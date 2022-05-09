@@ -2273,7 +2273,7 @@ def recover_dynamics_chrom(adata_rna,
                            alpha=None, 
                            beta=None, 
                            gamma=None, 
-                           t_=None
+                           t_sw=None
                            ):
 
     """Multi-omic dynamics recovery.
@@ -2359,9 +2359,9 @@ def recover_dynamics_chrom(adata_rna,
     gamma: `float` or list of `float` (default: `None`)
         Known degradation rates. Can be computed from scVelo `fit_gamma` values 
         as `gamma = fit_gamma * fit_alignment_scaling`.
-    t_: `float` or list of `float` (default: `None`)
+    t_sw: `float` or list of `float` (default: `None`)
         Known RNA switch time. Can be computed from scVelo `fit_t_` values 
-        as `t_ = fit_t_ / fit_alignment_scaling`.
+        as `t_sw = fit_t_ / fit_alignment_scaling`.
 
     Returns
     -------
@@ -2595,7 +2595,7 @@ def recover_dynamics_chrom(adata_rna,
         else:
             raise ValueError('Invalid direction argument (must be values in ["on","off","complete"])')
 
-    known_pars = [rescale_u, alpha, beta, gamma, t_]
+    known_pars = [rescale_u, alpha, beta, gamma, t_sw]
     for x in known_pars:
         if x is not None:
             if isinstance(x, (list, np.ndarray)):
@@ -2667,7 +2667,7 @@ def recover_dynamics_chrom(adata_rna,
                     alpha[i] if isinstance(alpha, (list, np.ndarray)) else alpha,
                     beta[i] if isinstance(beta, (list, np.ndarray)) else beta,
                     gamma[i] if isinstance(gamma, (list, np.ndarray)) else gamma,
-                    t_[i] if isinstance(t_, (list, np.ndarray)) else t_) 
+                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw) 
                 for i in gene_indices)
 
             for i,r in zip(gene_indices, res):
@@ -2745,7 +2745,7 @@ def recover_dynamics_chrom(adata_rna,
                                                                         alpha[i] if isinstance(alpha, (list, np.ndarray)) else alpha,
                                                                         beta[i] if isinstance(beta, (list, np.ndarray)) else beta,
                                                                         gamma[i] if isinstance(gamma, (list, np.ndarray)) else gamma,
-                                                                        t_[i] if isinstance(t_, (list, np.ndarray)) else t_)
+                                                                        t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw)
             t_sw, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
             likelihood, l_c, ssd_c, var_c = likelihood
             losses[i,:] = loss
@@ -3311,7 +3311,7 @@ def pie_summary(adata, genes=None):
     `Model 2`: model 2 complete genes.
 
     Parameters
-    ---------
+    ----------
     adata: :class:`~anndata.AnnData`
         Anndata result from dynamics recovery.
     genes: `str`,  list of `str` (default: `None`)
@@ -3342,7 +3342,7 @@ def switch_time_summary(adata, genes=None):
     `coupled-off`: coupled repression intervals.
 
     Parameters
-    ---------
+    ----------
     adata: :class:`~anndata.AnnData`
         Anndata result from dynamics recovery.
     genes: `str`,  list of `str` (default: `None`)
