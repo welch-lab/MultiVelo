@@ -19,9 +19,6 @@ each cell, and inferred the lengths of time lags between transcriptomic and epig
 Check out the :doc:`usage` section for further information.
 
 
-Contents
---------
-
 .. toctree::
    :caption: Main
    :maxdepth: 1
