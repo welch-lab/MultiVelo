@@ -54,6 +54,12 @@ napoleon_preprocess_types = False
 napoleon_type_aliases = None
 napoleon_attr_annotations = True
 
+html_theme = "sphinx_rtd_theme"
+html_static_path = ['_static']
+html_css_files = [
+    'custom.css',
+]
+
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
