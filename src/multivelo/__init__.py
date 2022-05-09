@@ -1,4 +1,4 @@
-from .dynamical_chrom_func import (
+from .auxiliary import (
     aggregate_peaks_10x,
     tfidf_norm,
     knn_smooth_chrom,
