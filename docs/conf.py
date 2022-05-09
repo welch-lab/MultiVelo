@@ -22,6 +22,8 @@ author = 'Chen Li'
 release = '0.1'
 version = '0.1.1'
 
+notebooks_url = "https://github.com/welch-lab/multivelo/raw/main/multivelo_demo/MultiVelo_Demo.ipynb"
+
 # -- General configuration
 
 extensions = [

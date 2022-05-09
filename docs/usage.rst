@@ -17,7 +17,14 @@ Demo
 
 A tutorial showing how to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_.
 
-We use the embryonic E18 mouse brain from 10X Multiome as an example (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_).
+We use the embryonic E18 mouse brain from 10X Multiome as an example.
+
+.. toctree::
+   :caption: Tutorials
+   :maxdepth: 1
+   :hidden:
+
+   MultiVelo_Demo
 
 CellRanger output files can be downloaded from 
 `10X website <https://www.10xgenomics.com/resources/datasets/fresh-embryonic-e-18-mouse-brain-5-k-1-standard-1-0-0>`_. 
