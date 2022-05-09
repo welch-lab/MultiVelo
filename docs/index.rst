@@ -23,9 +23,19 @@ Contents
 --------
 
 .. toctree::
+   :caption: Main
+   :maxdepth: 1
+   :hidden:
 
    usage
    api
+
+.. toctree::
+   :caption: Demo
+   :maxdepth: 1
+   :hidden:
+
+   MultiVelo_Demo
 
 
 .. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow

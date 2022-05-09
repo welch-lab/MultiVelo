@@ -19,13 +19,6 @@ A tutorial showing how to run MultiVelo can be found in `multivelo_demo <https:/
 
 We use the embryonic E18 mouse brain from 10X Multiome as an example.
 
-.. toctree::
-   :caption: Tutorials
-   :maxdepth: 1
-   :hidden:
-
-   MultiVelo_Demo
-
 CellRanger output files can be downloaded from 
 `10X website <https://www.10xgenomics.com/resources/datasets/fresh-embryonic-e-18-mouse-brain-5-k-1-standard-1-0-0>`_. 
 Crucially, the filtered feature barcode matrix folder, ATAC peak annotations TSV, and the feature 
