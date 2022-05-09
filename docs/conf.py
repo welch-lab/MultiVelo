@@ -34,7 +34,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.githubpages',
     'nbsphinx',
-    'nbsphinx-link'
+    'nbsphinx_link'
 ]
 
 autosummary_generate = True
