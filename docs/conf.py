@@ -4,13 +4,14 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from sphinx.ext import autosummary
-import multivelo
+
 import matplotlib
 matplotlib.use('agg')
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE.parent.parent))
-sys.path.insert(0, os.path.abspath("_ext"))
+sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
+
+import multivelo
 
 # -- Project information
 
