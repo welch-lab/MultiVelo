@@ -35,7 +35,7 @@ Contents
    :maxdepth: 1
    :hidden:
 
-   MultiVelo_Demo
+   test
 
 
 .. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow
