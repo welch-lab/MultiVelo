@@ -9,7 +9,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 import ipywidgets
 
-def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=10000, min_corr=0.5, return_dict=False, verbose=False):
+def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=10000, min_corr=0.5, gene_body=False, return_dict=False, verbose=False):
     """Peak to gene aggregation.
 
     This function aggregates promoter and enhancer peaks to genes based on the 10X linkage file.
@@ -44,6 +44,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
     gene_body_dict = {}
     corr_dict = {}
 
+    # read annotations
     with open(peak_annot_file) as f:
         header = next(f)
         tmp = header.split('\t')
@@ -107,6 +108,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                         else:
                             distal_dict[gene].append(peak)
 
+    # read linkages
     with open(linkage_file) as f:
         for line in f:
             tmp = line.rstrip().split('\t')
@@ -166,7 +168,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                 corr = float(tmp[7])
                 for t3 in tmp3:
                     gene2 = t3.split('_')
-                    # peak 1 belongs to gene 2 or are close in distance -> peak 1 is added to gene 2
+                    # peak 2 belongs to gene 1 or are close in distance -> peak 2 is added to gene 1
                     if ((gene1 == gene2[0]) or (float(tmp[11]) < peak_dist)):
                         gene = gene1
                         if gene in corr_dict:
@@ -183,8 +185,13 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
     if verbose:
         print(f'Found {len(promoter_genes)} genes with promoter peaks')
     for gene in promoter_genes:
+        if gene_body: # add gene-body peaks
+            if gene in gene_body_dict:
+                for peak in gene_body_dict[gene]:
+                    if peak not in gene_dict[gene]:
+                        gene_dict[gene].append(peak)
         enhancer_dict[gene] = []
-        if gene in corr_dict:
+        if gene in corr_dict: # add enhancer peaks
             for j, peak in enumerate(corr_dict[gene][0]):
                 corr = corr_dict[gene][1][j]
                 if corr > min_corr:
@@ -192,6 +199,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                         gene_dict[gene].append(peak)
                         enhancer_dict[gene].append(peak)
 
+    # aggregate to genes
     adata_atac_X_copy = adata_atac.X.A
     gene_mat = np.zeros((adata_atac.shape[0], len(promoter_genes)))
     var_names = adata_atac.var_names.to_numpy()
