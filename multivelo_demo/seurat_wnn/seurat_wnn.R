@@ -16,7 +16,7 @@ barcodes <- read.delim("../filtered_cells.txt", header = F, stringsAsFactors = F
 brain <- CreateSeuratObject(counts = brain.data$`Gene Expression`[,barcodes])
 brain <- NormalizeData(brain)
 brain <- FindVariableFeatures(brain)
-brain <- ScaleData(brain, do.scale = F) # not scaled for consistency with scVelo
+brain <- ScaleData(brain, do.scale = F) # not scaled for consistency with scVelo (optionally, use SCTransform)
 brain <- RunPCA(brain, verbose = FALSE)
 brain <- RunUMAP(brain, dims = 1:50, reduction.name = 'umap.rna', reduction.key = 'rnaUMAP_') # optional
 
