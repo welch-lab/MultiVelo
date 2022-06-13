@@ -741,7 +741,7 @@ class ChromatinDynamical:
         self.rna_only = rna_only
         self.fit_decoupling = fit_decoupling
         self.max_iter = max_iter
-        self.n_anchors = np.clip(int(fit_args['t']), 200, 2000)
+        self.n_anchors = np.clip(int(fit_args['t']), 201, 2000)
         self.k_dist = np.clip(int(fit_args['k']), 1, 20)
         self.tm = np.clip(fit_args['thresh_multiplier'], 0.4, 2)
         self.weight_c = np.clip(fit_args['weight_c'], 0.1, 5)
@@ -939,6 +939,9 @@ class ChromatinDynamical:
         ws = self.s >= np.percentile(s_non_zero, 95)
         ss_u = self.u[wu | ws]
         ss_s = self.s[wu | ws]
+        if (ss_u == 0) or (ss_s == 0):
+            self.low_quality = True
+            return
         gamma = np.dot(ss_u, ss_s) / np.dot(ss_s, ss_s)
         self.steady_state_func = lambda x: gamma*x
 
@@ -2419,6 +2422,7 @@ def recover_dynamics_chrom(adata_rna,
     fit_args['max_iter'] = max_iter
     fit_args['init_mode'] = init_mode
     fit_args['fit_decoupling'] = fit_decoupling
+    n_anchors = np.clip(int(n_anchors), 201, 2000)
     fit_args['t'] = n_anchors
     fit_args['k'] = k_dist
     fit_args['thresh_multiplier'] = thresh_multiplier
@@ -2673,12 +2677,12 @@ def recover_dynamics_chrom(adata_rna,
             for i,r in zip(gene_indices, res):
                 (loss, model, direct_out, parameters, initial_exp, 
                  time, state, velocity, likelihood, anchors) = r
-                t_sw, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
+                switch, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
                 likelihood, l_c, ssd_c, var_c = likelihood
                 losses[i,:] = loss
                 models[i] = model
                 directions.append(direct_out)
-                t_sws[i,:] = t_sw
+                t_sws[i,:] = switch
                 rates[i,:] = rate
                 scale_ccs[i] = scale_cc
                 rescale_cs[i] = rescale_c
@@ -2746,12 +2750,12 @@ def recover_dynamics_chrom(adata_rna,
                                                                         beta[i] if isinstance(beta, (list, np.ndarray)) else beta,
                                                                         gamma[i] if isinstance(gamma, (list, np.ndarray)) else gamma,
                                                                         t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw)
-            t_sw, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
+            switch, rate, scale_cc, rescale_c, rescale_u, realign_ratio = parameters
             likelihood, l_c, ssd_c, var_c = likelihood
             losses[i,:] = loss
             models[i] = model
             directions.append(direct_out)
-            t_sws[i,:] = t_sw
+            t_sws[i,:] = switch
             rates[i,:] = rate
             scale_ccs[i] = scale_cc
             rescale_cs[i] = rescale_c
