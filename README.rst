@@ -1,5 +1,5 @@
 MultiVelo - Velocity Inference from Single-Cell Multi-Omic Data
-============================================================
+===============================================================
 
 Single-cell multi-omic datasets, in which multiple molecular modalities are profiled 
 within the same cell, provide a unique opportunity to discover the interplay between 
@@ -16,7 +16,7 @@ each cell, and inferred the lengths of time lags between transcriptomic and epig
 
 Install through PyPI: **pip install multivelo**
 
-**New**: `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page is up.
+**New**: `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page is up. You can find detailed parameter descriptions and tutorials on the website.
 
 A tutorial showing how to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_.
 
