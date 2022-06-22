@@ -27,6 +27,8 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
         Maximum distance for peaks to be included for a gene.
     min_corr: `float` (default: 0.5)
         Minimum correlation for a peak to be considered as enhancer.
+    gene_body: `bool` (default: `False`)
+        Whether to add gene body peaks to the associated promoters.
     return_dict: `bool` (default: `False`)
         Whether to return promoter and enhancer dictionaries.
     verbose: `bool` (default: `False`)
@@ -37,7 +39,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
     A new ATAC anndata object which stores gene aggreagted peak counts.
     Additionally, if `return_dict==True`:
         A dictionary which stores genes and promoter peaks.
-        A dictionary which stores genes and enhancer peaks.
+        And a dictionary which stores genes and enhancer peaks.
     """
     promoter_dict = {}
     distal_dict = {}
@@ -272,7 +274,7 @@ def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None, n_neighbo
 
     Returns
     -------
-    `.layers['Mc]` stores imputed values.
+    `.layers['Mc']` stores imputed values.
     """
     if nn_idx is not None and nn_dist is not None:
         if nn_idx.shape[0] != adata_atac.shape[0]:
