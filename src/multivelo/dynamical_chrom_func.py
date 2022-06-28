@@ -939,7 +939,7 @@ class ChromatinDynamical:
         ws = self.s >= np.percentile(s_non_zero, 95)
         ss_u = self.u[wu | ws]
         ss_s = self.s[wu | ws]
-        if (ss_u == 0) or (ss_s == 0):
+        if np.all(ss_u==0) or np.all(ss_s==0):
             self.low_quality = True
             return
         gamma = np.dot(ss_u, ss_s) / np.dot(ss_s, ss_s)
