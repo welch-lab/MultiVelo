@@ -1,4 +1,4 @@
-|Stars| |PyPI| |PyPIDownloads| |Docs|
+|Stars| |PyPI| |PyPIDownloads| |Bioconda| |Docs|
 
 MultiVelo - Velocity Inference from Single-Cell Multi-Omic Data
 ===============================================================
@@ -38,11 +38,14 @@ Check out the :doc:`usage` section for further information.
 .. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow
    :target: https://github.com/welch-lab/multivelo/stargazers
 
-.. |PyPI| image:: https://img.shields.io/pypi/v/multivelo.svg
+.. |PyPI| image:: https://img.shields.io/pypi/v/multivelo?logo=PyPI
    :target: https://pypi.org/project/multivelo
 
 .. |PyPIDownloads| image:: https://pepy.tech/badge/multivelo
    :target: https://pepy.tech/project/multivelo
+
+.. |Bioconda| image:: https://img.shields.io/conda/dn/bioconda/multivelo?logo=Anaconda
+   :target: https://anaconda.org/bioconda/multivelo
 
 .. |Docs| image:: https://readthedocs.org/projects/multivelo/badge/?version=latest
    :target: https://multivelo.readthedocs.io
