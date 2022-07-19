@@ -6,11 +6,17 @@ Usage
 Installation
 ------------
 
-To use MultiVelo, first install it using pip:
+To use MultiVelo, first install it using pip or conda:
 
 .. code-block:: console
 
    $ pip install multivelo
+
+or
+
+.. code-block:: console
+
+   $ conda install -c bioconda multivelo
 
 Demo
 ----
