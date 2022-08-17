@@ -2920,39 +2920,39 @@ def set_velocity_genes(adata,
     rescale_u_upper: `float` (default: `None`)
         Maximum rescale_u.
     rescale_u_lower: `float` (default: `None`)
-        Maximum rescale_u.
+        Minimum rescale_u.
     rescale_c_upper: `float` (default: `None`)
         Maximum rescale_c.
     rescale_c_lower: `float` (default: `None`)
-        Maximum rescale_c.
+        Minimum rescale_c.
     primed_upper: `float` (default: `None`)
         Maximum primed interval.
     primed_lower: `float` (default: `None`)
-        Maximum primed interval.
+        Minimum primed interval.
     decoupled_upper: `float` (default: `None`)
         Maximum decoupled interval.
     decoupled_lower: `float` (default: `None`)
-        Maximum decoupled interval.
+        Minimum decoupled interval.
     alpha_c_upper: `float` (default: `None`)
         Maximum alpha_c.
     alpha_c_lower: `float` (default: `None`)
-        Maximum alpha_c.
+        Minimum alpha_c.
     alpha_upper: `float` (default: `None`)
         Maximum alpha.
     alpha_lower: `float` (default: `None`)
-        Maximum alpha.
+        Minimum alpha.
     beta_upper: `float` (default: `None`)
         Maximum beta.
     beta_lower: `float` (default: `None`)
-        Maximum beta.
+        Minimum beta.
     gamma_upper: `float` (default: `None`)
         Maximum gamma.
     gamma_lower: `float` (default: `None`)
-        Maximum gamma.
+        Minimum gamma.
     scale_cc_upper: `float` (default: `None`)
         Maximum scale_cc.
     scale_cc_lower: `float` (default: `None`)
-        Maximum scale_cc.
+        Minimum scale_cc.
     verbose: `bool` (default: `False`)
         Whether to print the number of velocity genes.
 
