@@ -34,6 +34,13 @@ Check out the :doc:`usage` section for further information.
 
    MultiVelo_Demo
 
+.. toctree::
+   :caption: Template
+   :maxdepth: 1
+   :hidden:
+
+   MultiVelo_Template
+
 
 .. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow
    :target: https://github.com/welch-lab/multivelo/stargazers
