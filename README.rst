@@ -37,5 +37,4 @@ which contains a zip file of three files: "nn_cells.txt", "nn_dist.txt", and "nn
 The R script used to generate these files can also be found in the same folder.
 
 | Citation:
-| Li, C., Virgilio, M.C., Collins, K.L. & Welch J.D. Multi-omic single-cell velocity models epigenome–transcriptome interactions 
-and improves cell fate prediction. Nat Biotechnol (2022).
+| Li, C., Virgilio, M.C., Collins, K.L. & Welch J.D. Multi-omic single-cell velocity models epigenome–transcriptome interactions and improves cell fate prediction. Nat Biotechnol (2022).
