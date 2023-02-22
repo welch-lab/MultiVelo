@@ -7,12 +7,17 @@ import scanpy as sc
 import scvelo as scv
 import pandas as pd
 from tqdm.auto import tqdm
-import ipywidgets
+# import ipywidgets
 
-def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=10000, min_corr=0.5, gene_body=False, return_dict=False, verbose=False):
+
+def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
+                        peak_dist=10000, min_corr=0.5, gene_body=False,
+                        return_dict=False, verbose=False):
+
     """Peak to gene aggregation.
 
-    This function aggregates promoter and enhancer peaks to genes based on the 10X linkage file.
+    This function aggregates promoter and enhancer peaks to genes based on the
+    10X linkage file.
 
     Parameters
     ----------
@@ -21,8 +26,8 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
     peak_annot_file: `str`
         Peak annotation file from 10X CellRanger ARC.
     linkage_file: `str`
-        Peak-gene linkage file from 10X CellRanger ARC. This file stores highly correlated peak-peak
-        and peak-gene pair information.
+        Peak-gene linkage file from 10X CellRanger ARC. This file stores highly
+        correlated peak-peak and peak-gene pair information.
     peak_dist: `int` (default: 10000)
         Maximum distance for peaks to be included for a gene.
     min_corr: `float` (default: 0.5)
@@ -55,7 +60,9 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
         elif len(tmp) == 6:
             cellranger_version = 2
         else:
-            raise ValueError('Peak annotation file should contain 4 columns (CellRanger ARC 1.0.0) or 5 columns (CellRanger ARC 2.0.0)')
+            raise ValueError('Peak annotation file should contain 4 columns '
+                             '(CellRanger ARC 1.0.0) or 5 columns (CellRanger '
+                             'ARC 2.0.0)')
         if verbose:
             print(f'CellRanger ARC identified as {cellranger_version}.0.0')
         if cellranger_version == 1:
@@ -67,7 +74,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                     genes = tmp[1].split(';')
                     dists = tmp[2].split(';')
                     types = tmp[3].split(';')
-                    for i,gene in enumerate(genes):
+                    for i, gene in enumerate(genes):
                         dist = dists[i]
                         annot = types[i]
                         if annot == 'promoter':
@@ -124,27 +131,54 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                     gene1 = t2.split('_')
                     for t3 in tmp3:
                         gene2 = t3.split('_')
-                        # one of the peaks is in promoter, peaks belong to the same gene or are close in distance
-                        if ((gene1[1] == "promoter") != (gene2[1] == "promoter")) and ((gene1[0] == gene2[0]) or (float(tmp[11]) < peak_dist)):
+                        # one of the peaks is in promoter, peaks belong to the
+                        # same gene or are close in distance
+                        if (((gene1[1] == "promoter") !=
+                            (gene2[1] == "promoter")) and
+                            ((gene1[0] == gene2[0]) or
+                             (float(tmp[11]) < peak_dist))):
+
                             if gene1[1] == "promoter":
                                 gene = gene1[0]
                             else:
                                 gene = gene2[0]
                             if gene in corr_dict:
-                                # peak 1 is in promoter, peak 2 is not in gene body -> peak 2 is added to gene 1
-                                if peak2 not in corr_dict[gene] and gene1[1] == "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
+                                # peak 1 is in promoter, peak 2 is not in gene
+                                # body -> peak 2 is added to gene 1
+                                if (peak2 not in corr_dict[gene] and
+                                    gene1[1] == "promoter" and
+                                    (gene2[0] not in gene_body_dict or
+                                     peak2 not in gene_body_dict[gene2[0]])):
+
                                     corr_dict[gene][0].append(peak2)
                                     corr_dict[gene][1].append(corr)
-                                # peak 2 is in promoter, peak 1 is not in gene body -> peak 1 is added to gene 2
-                                if peak1 not in corr_dict[gene] and gene2[1] == "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
+                                # peak 2 is in promoter, peak 1 is not in gene
+                                # body -> peak 1 is added to gene 2
+                                if (peak1 not in corr_dict[gene] and
+                                    gene2[1] == "promoter" and
+                                    (gene1[0] not in gene_body_dict or
+                                     peak1 not in gene_body_dict[gene1[0]])):
+
                                     corr_dict[gene][0].append(peak1)
                                     corr_dict[gene][1].append(corr)
                             else:
-                                # peak 1 is in promoter, peak 2 is not in gene body -> peak 2 is added to gene 1
-                                if gene1[1] == "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
+                                # peak 1 is in promoter, peak 2 is not in gene
+                                # body -> peak 2 is added to gene 1
+                                if (gene1[1] == "promoter" and
+                                    (gene2[0] not in
+                                     gene_body_dict
+                                     or peak2 not in
+                                     gene_body_dict[gene2[0]])):
+
                                     corr_dict[gene] = [[peak2], [corr]]
-                                # peak 2 is in promoter, peak 1 is not in gene body -> peak 1 is added to gene 2
-                                if gene2[1] == "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
+                                # peak 2 is in promoter, peak 1 is not in gene
+                                # body -> peak 1 is added to gene 2
+                                if (gene2[1] == "promoter" and
+                                    (gene1[0] not in
+                                     gene_body_dict
+                                     or peak1 not in
+                                     gene_body_dict[gene1[0]])):
+
                                     corr_dict[gene] = [[peak1], [corr]]
             elif tmp[12] == "peak-gene":
                 peak1 = f'{tmp[0]}:{tmp[1]}-{tmp[2]}'
@@ -153,15 +187,22 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                 corr = float(tmp[7])
                 for t2 in tmp2:
                     gene1 = t2.split('_')
-                    # peak 1 belongs to gene 2 or are close in distance -> peak 1 is added to gene 2
+                    # peak 1 belongs to gene 2 or are close in distance
+                    # -> peak 1 is added to gene 2
                     if ((gene1[0] == gene2) or (float(tmp[11]) < peak_dist)):
                         gene = gene1[0]
                         if gene in corr_dict:
-                            if peak1 not in corr_dict[gene] and gene1[1] != "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
+                            if (peak1 not in corr_dict[gene] and
+                                gene1[1] != "promoter" and
+                                (gene1[0] not in gene_body_dict or
+                                 peak1 not in gene_body_dict[gene1[0]])):
+
                                 corr_dict[gene][0].append(peak1)
                                 corr_dict[gene][1].append(corr)
                         else:
-                            if gene1[1] != "promoter" and (gene1[0] not in gene_body_dict or peak1 not in gene_body_dict[gene1[0]]):
+                            if (gene1[1] != "promoter" and
+                                (gene1[0] not in gene_body_dict or 
+                                 peak1 not in gene_body_dict[gene1[0]])):
                                 corr_dict[gene] = [[peak1], [corr]]
             elif tmp[12] == "gene-peak":
                 peak2 = f'{tmp[3]}:{tmp[4]}-{tmp[5]}'
@@ -170,15 +211,23 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
                 corr = float(tmp[7])
                 for t3 in tmp3:
                     gene2 = t3.split('_')
-                    # peak 2 belongs to gene 1 or are close in distance -> peak 2 is added to gene 1
+                    # peak 2 belongs to gene 1 or are close in distance
+                    # -> peak 2 is added to gene 1
                     if ((gene1 == gene2[0]) or (float(tmp[11]) < peak_dist)):
                         gene = gene1
                         if gene in corr_dict:
-                            if peak2 not in corr_dict[gene] and gene2[1] != "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
+                            if (peak2 not in corr_dict[gene] and
+                                gene2[1] != "promoter" and
+                                (gene2[0] not in gene_body_dict or
+                                 peak2 not in gene_body_dict[gene2[0]])):
+
                                 corr_dict[gene][0].append(peak2)
                                 corr_dict[gene][1].append(corr)
                         else:
-                            if gene2[1] != "promoter" and (gene2[0] not in gene_body_dict or peak2 not in gene_body_dict[gene2[0]]):
+                            if (gene2[1] != "promoter" and
+                                (gene2[0] not in gene_body_dict or
+                                 peak2 not in gene_body_dict[gene2[0]])):
+
                                 corr_dict[gene] = [[peak2], [corr]]
 
     gene_dict = promoter_dict
@@ -187,13 +236,13 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
     if verbose:
         print(f'Found {len(promoter_genes)} genes with promoter peaks')
     for gene in promoter_genes:
-        if gene_body: # add gene-body peaks
+        if gene_body:  # add gene-body peaks
             if gene in gene_body_dict:
                 for peak in gene_body_dict[gene]:
                     if peak not in gene_dict[gene]:
                         gene_dict[gene].append(peak)
         enhancer_dict[gene] = []
-        if gene in corr_dict: # add enhancer peaks
+        if gene in corr_dict:  # add enhancer peaks
             for j, peak in enumerate(corr_dict[gene][0]):
                 corr = corr_dict[gene][1][j]
                 if corr > min_corr:
@@ -210,12 +259,12 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file, peak_dist=100
         for peak in peaks:
             if peak in var_names:
                 peak_index = np.where(var_names == peak)[0][0]
-                gene_mat[:,i] += adata_atac_X_copy[:,peak_index]
+                gene_mat[:, i] += adata_atac_X_copy[:, peak_index]
     gene_mat[gene_mat < 0] = 0
     gene_mat = AnnData(X=csr_matrix(gene_mat))
     gene_mat.obs_names = pd.Index(list(adata_atac.obs_names))
     gene_mat.var_names = pd.Index(promoter_genes)
-    gene_mat = gene_mat[:,gene_mat.X.sum(0) > 0]
+    gene_mat = gene_mat[:, gene_mat.X.sum(0) > 0]
     if return_dict:
         return gene_mat, promoter_dict, enhancer_dict
     else:
