@@ -7,7 +7,6 @@ import scanpy as sc
 import scvelo as scv
 import pandas as pd
 from tqdm.auto import tqdm
-# import ipywidgets
 
 
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
@@ -201,7 +200,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
                                 corr_dict[gene][1].append(corr)
                         else:
                             if (gene1[1] != "promoter" and
-                                (gene1[0] not in gene_body_dict or 
+                                (gene1[0] not in gene_body_dict or
                                  peak1 not in gene_body_dict[gene1[0]])):
                                 corr_dict[gene] = [[peak1], [corr]]
             elif tmp[12] == "gene-peak":
@@ -287,7 +286,8 @@ def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
 
     Returns
     -------
-    If `copy==True`, a new ATAC anndata object which stores normalized counts in `.X`.
+    If `copy==True`, a new ATAC anndata object which stores normalized counts
+    in `.X`.
     """
     npeaks = adata_atac.X.sum(1)
     npeaks_inv = csr_matrix(1.0/npeaks)
@@ -301,7 +301,8 @@ def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
         adata_atac.X = tf.dot(idf) * scale_factor
 
 
-def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None, n_neighbors=None):
+def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None,
+                     n_neighbors=None):
     """KNN smoothing.
 
     This function smooth (impute) the count matrix with k nearest neighbors.
@@ -327,16 +328,26 @@ def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None, n_neighbo
     """
     if nn_idx is not None and nn_dist is not None:
         if nn_idx.shape[0] != adata_atac.shape[0]:
-            raise ValueError('Number of rows of KNN indices does not equal to number of observations.')
+            raise ValueError('Number of rows of KNN indices does not equal to '
+                             'number of observations.')
         if nn_dist.shape[0] != adata_atac.shape[0]:
-            raise ValueError('Number of rows of KNN distances does not equal to number of observations.')
+            raise ValueError('Number of rows of KNN distances does not equal '
+                             'to number of observations.')
         X = coo_matrix(([], ([], [])), shape=(nn_idx.shape[0], 1))
-        conn, sigma, rho, dists = fuzzy_simplicial_set(X, nn_idx.shape[1], None, None, knn_indices=nn_idx-1, knn_dists=nn_dist, return_dists=True)
+        conn, sigma, rho, dists = fuzzy_simplicial_set(X, nn_idx.shape[1],
+                                                       None, None,
+                                                       knn_indices=nn_idx-1,
+                                                       knn_dists=nn_dist,
+                                                       return_dists=True)
     elif conn is not None:
         pass
     else:
-        raise ValueError('Please input nearest neighbor indices and distances, or a connectivities matrix of size n x n, with columns being neighbors.' + 
-                         ' For example, RNA connectivities can usually be found in adata.obsp.')
+        raise ValueError('Please input nearest neighbor indices and distances,'
+                         ' or a connectivities matrix of size n x n, with '
+                         'columns being neighbors.'
+                         ' For example, RNA connectivities can usually be '
+                         'found in adata.obsp.')
+
     conn = conn.tocsr().copy()
     n_counts = (conn > 0).sum(1).A1
     if n_neighbors is not None and n_neighbors < n_counts.min():
@@ -350,9 +361,11 @@ def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None, n_neighbo
 def calculate_qc_metrics(adata, **kwargs):
     """Basic QC metrics.
 
-    This function calculate basic QC metrics with `scanpy.pp.calculate_qc_metrics`.
-    Additionally, total counts and the ratio of unspliced and spliced matrices, as well as
-    the cell cycle scores (with `scvelo.tl.score_genes_cell_cycle`) will be computed. 
+    This function calculate basic QC metrics with
+    `scanpy.pp.calculate_qc_metrics`.
+    Additionally, total counts and the ratio of unspliced and spliced matrices,
+    as well as the cell cycle scores (with `scvelo.tl.score_genes_cell_cycle`)
+    will be computed.
 
     Parameters
     ----------
@@ -362,8 +375,8 @@ def calculate_qc_metrics(adata, **kwargs):
 
     Returns
     -------
-    Outputs of `scanpy.pp.calculate_qc_metrics` and `scvelo.tl.score_genes_cell_cycle`.
-    total_unspliced, total_spliced: `.var`
+    Outputs of `scanpy.pp.calculate_qc_metrics` and
+    `scvelo.tl.score_genes_cell_cycle`. total_unspliced, total_spliced: `.var`
         total counts of unspliced and spliced matrices.
     unspliced_ratio: `.var`
         ratio of unspliced counts vs (unspliced + spliced counts).
@@ -381,22 +394,24 @@ def calculate_qc_metrics(adata, **kwargs):
     adata.var['total_spliced'] = total_s
     adata.var['unspliced_ratio'] = total_u / (total_s + total_u)
     scv.tl.score_genes_cell_cycle(adata)
-    adata.obs['cell_cycle_score'] = adata.obs['G2M_score'] - adata.obs['S_score']
+    adata.obs['cell_cycle_score'] = (adata.obs['G2M_score']
+                                     - adata.obs['S_score'])
 
 
-def ellipse_fit(adata, 
-                genes, 
-                color_by='quantile', 
-                n_cols=8, 
-                title=None, 
-                figsize=None, 
+def ellipse_fit(adata,
+                genes,
+                color_by='quantile',
+                n_cols=8,
+                title=None,
+                figsize=None,
                 axis_on=False,
-                pointsize=2, 
+                pointsize=2,
                 linewidth=2
                 ):
     """Fit ellipses to unspliced and spliced phase portraits.
 
-    This function plots the ellipse fits on the unspliced-spliced phase portraits.
+    This function plots the ellipse fits on the unspliced-spliced phase
+    portraits.
 
     Parameters
     ----------
@@ -405,10 +420,14 @@ def ellipse_fit(adata,
     genes: `str`,  list of `str`
         List of genes to plot.
     color_by: `str` (default: `quantile`)
-        Color by the four quantiles based on ellipse fit if `quantile`. Other common values are leiden, louvain, celltype, etc.
-        If not `quantile`, the color field must be present in `.uns`, which can be pre-computed with `scanpy.pl.scatter`.
-        For `quantile`, red, orange, green, and blue represent quantile left, top, right, and bottom, respectively.
-        If `quantile_scores`, `multivelo.compute_quantile_scores` function must have been run.
+        Color by the four quantiles based on ellipse fit if `quantile`. Other
+        common values are leiden, louvain, celltype, etc.
+        If not `quantile`, the color field must be present in `.uns`, which
+        can be pre-computed with `scanpy.pl.scatter`.
+        For `quantile`, red, orange, green, and blue represent quantile left,
+        top, right, and bottom, respectively.
+        If `quantile_scores`, `multivelo.compute_quantile_scores` function
+        must have been run.
     n_cols: `int` (default: 8)
         Number of columns to plot on each row.
     figsize: `tuple` (default: `None`)
@@ -430,14 +449,16 @@ def ellipse_fit(adata,
     gn = len(genes)
     if gn < n_cols:
         n_cols = gn
-    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, figsize=(2 * n_cols, 2.4 * (-(-gn // n_cols))) if figsize is None else figsize)
+    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, figsize=(2 * n_cols,
+                            2.4 * (-(-gn // n_cols)))
+                            if figsize is None else figsize)
     count = 0
     for gene in genes:
-        u = np.array(adata[:,gene].layers['Mu'])
-        s = np.array(adata[:,gene].layers['Ms'])
+        u = np.array(adata[:, gene].layers['Mu'])
+        s = np.array(adata[:, gene].layers['Ms'])
         row = count // n_cols
         col = count % n_cols
-        non_zero = (u>0) & (s>0)
+        non_zero = (u > 0) & (s > 0)
         if np.sum(non_zero) < 10:
             count += 1
             fig.delaxes(axs[row, col])
@@ -447,17 +468,19 @@ def ellipse_fit(adata,
         std_u, std_s = np.std(u[non_zero]), np.std(s[non_zero])
         u_ = (u - mean_u)/std_u
         s_ = (s - mean_s)/std_s
-        X = np.reshape(s_[non_zero], (-1,1))
-        Y = np.reshape(u_[non_zero], (-1,1))
+        X = np.reshape(s_[non_zero], (-1, 1))
+        Y = np.reshape(u_[non_zero], (-1, 1))
 
         # Ax^2 + Bxy + Cy^2 + Dx + Ey + 1 = 0
         A = np.hstack([X**2, X * Y, Y**2, X, Y])
         b = -np.ones_like(X)
-        x,res,_,_ = np.linalg.lstsq(A, b)
+        x, res, _, _ = np.linalg.lstsq(A, b)
         x = x.squeeze()
-        A,B,C,D,E = x
+        A, B, C, D, E = x
         good_fit = B**2 - 4*A*C < 0
-        theta = np.arctan(B/(A - C))/2 if x[0] > x[2] else np.pi/2 + np.arctan(B/(A - C))/2
+        theta = np.arctan(B/(A - C))/2 \
+            if x[0] > x[2] \
+            else np.pi/2 + np.arctan(B/(A - C))/2
         good_fit = good_fit & (theta < np.pi/2) & (theta > 0)
         if not good_fit:
             count += 1
@@ -466,7 +489,8 @@ def ellipse_fit(adata,
         x_coord = np.linspace((-mean_s)/std_s, (np.max(s)-mean_s)/std_s, 500)
         y_coord = np.linspace((-mean_u)/std_u, (np.max(u)-mean_u)/std_u, 500)
         X_coord, Y_coord = np.meshgrid(x_coord, y_coord)
-        Z_coord = A * X_coord**2 + B * X_coord * Y_coord + C * Y_coord**2 + D * X_coord + E * Y_coord + 1
+        Z_coord = (A * X_coord**2 + B * X_coord * Y_coord + C * Y_coord**2 +
+                   D * X_coord + E * Y_coord + 1)
 
         M0 = np.array([
              A, B/2, D/2,
@@ -494,39 +518,54 @@ def ellipse_fit(adata,
         xbot2 = xc - b*np.cos(theta2)
         ybot2 = yc - b*np.sin(theta2)
         mse = res[0] / np.sum(non_zero)
-        major = lambda x,y : (y - yc) - (slope_major * (x - xc))
-        minor = lambda x,y : (y - yc) - (slope_minor * (x - xc))
-        quant1 = (major(s_,u_) > 0) & (minor(s_,u_) < 0)
-        quant2 = (major(s_,u_) > 0) & (minor(s_,u_) > 0)
-        quant3 = (major(s_,u_) < 0) & (minor(s_,u_) > 0)
-        quant4 = (major(s_,u_) < 0) & (minor(s_,u_) < 0)
+        major = lambda x, y: (y - yc) - (slope_major * (x - xc))
+        minor = lambda x, y: (y - yc) - (slope_minor * (x - xc))
+        quant1 = (major(s_, u_) > 0) & (minor(s_, u_) < 0)
+        quant2 = (major(s_, u_) > 0) & (minor(s_, u_) > 0)
+        quant3 = (major(s_, u_) < 0) & (minor(s_, u_) > 0)
+        quant4 = (major(s_, u_) < 0) & (minor(s_, u_) < 0)
         if (np.sum(quant1 | quant4) < 10) or (np.sum(quant2 | quant3) < 10):
             count += 1
             continue
 
         if by_quantile:
-            axs[row, col].scatter(s_[quant1], u_[quant1], s=pointsize, c='tab:red', alpha=0.6)
-            axs[row, col].scatter(s_[quant2], u_[quant2], s=pointsize, c='tab:orange', alpha=0.6)
-            axs[row, col].scatter(s_[quant3], u_[quant3], s=pointsize, c='tab:green', alpha=0.6)
-            axs[row, col].scatter(s_[quant4], u_[quant4], s=pointsize, c='tab:blue', alpha=0.6)
+            axs[row, col].scatter(s_[quant1], u_[quant1], s=pointsize,
+                                  c='tab:red', alpha=0.6)
+            axs[row, col].scatter(s_[quant2], u_[quant2], s=pointsize,
+                                  c='tab:orange', alpha=0.6)
+            axs[row, col].scatter(s_[quant3], u_[quant3], s=pointsize,
+                                  c='tab:green', alpha=0.6)
+            axs[row, col].scatter(s_[quant4], u_[quant4], s=pointsize,
+                                  c='tab:blue', alpha=0.6)
         elif by_quantile_score:
             if 'quantile_scores' not in adata.layers:
-                raise ValueError('Please run multivelo.compute_quantile_scores first to compute quantile scores.')
-            axs[row, col].scatter(s_, u_, s=pointsize, c=adata[:,gene].layers['quantile_scores'], cmap='RdBu_r', alpha=0.7)
+                raise ValueError('Please run multivelo.compute_quantile_scores'
+                                 ' first to compute quantile scores.')
+            axs[row, col].scatter(s_, u_, s=pointsize,
+                                  c=adata[:, gene].layers['quantile_scores'],
+                                  cmap='RdBu_r', alpha=0.7)
         else:
             for i in range(len(types)):
                 filt = adata.obs[color_by] == types[i]
-                axs[row, col].scatter(s_[filt], u_[filt], s=pointsize, c=colors[i], alpha=0.7)
-        axs[row, col].contour(X_coord, Y_coord, Z_coord, levels=[0], colors=('r'), linewidths=linewidth, alpha=0.7)
+                axs[row, col].scatter(s_[filt], u_[filt], s=pointsize,
+                                      c=colors[i], alpha=0.7)
+        axs[row, col].contour(X_coord, Y_coord, Z_coord, levels=[0],
+                              colors=('r'), linewidths=linewidth, alpha=0.7)
         axs[row, col].scatter([xc], [yc], c='black', s=5, zorder=2)
         axs[row, col].scatter([0], [0], c='black', s=5, zorder=2)
-        axs[row, col].plot([xtop, xbot], [ytop, ybot], color='b', linestyle='dashed', linewidth=linewidth, alpha=0.7)
-        axs[row, col].plot([xtop2, xbot2], [ytop2, ybot2], color='g', linestyle='dashed', linewidth=linewidth, alpha=0.7)
+        axs[row, col].plot([xtop, xbot], [ytop, ybot], color='b',
+                           linestyle='dashed', linewidth=linewidth, alpha=0.7)
+        axs[row, col].plot([xtop2, xbot2], [ytop2, ybot2], color='g',
+                           linestyle='dashed', linewidth=linewidth, alpha=0.7)
 
         axs[row, col].set_title(f'{gene} {mse:.3g}')
         axs[row, col].set_xlabel('s')
         axs[row, col].set_ylabel('u')
-        common_range = [np.min([(-mean_s)/std_s, (-mean_u)/std_u])-(0.05*np.max(s)/std_s), np.max([(np.max(s)-mean_s)/std_s, (np.max(u)-mean_u)/std_u])+(0.05*np.max(s)/std_s)]
+        common_range = [(np.min([(-mean_s)/std_s, (-mean_u)/std_u])
+                        - (0.05*np.max(s)/std_s)),
+                        (np.max([(np.max(s)-mean_s)/std_s,
+                                 (np.max(u)-mean_u)/std_u])
+                        + (0.05*np.max(s)/std_s))]
         axs[row, col].set_xlim(common_range)
         axs[row, col].set_ylim(common_range)
         if not axis_on:
@@ -548,22 +587,24 @@ def ellipse_fit(adata,
     fig.tight_layout(rect=[0, 0.1, 1, 0.98])
 
 
-def compute_quantile_scores(adata, 
-                            verbose=True, 
-                            n_pcs=30, 
+def compute_quantile_scores(adata,
+                            verbose=True,
+                            n_pcs=30,
                             n_neighbors=30
                             ):
-    """Fit ellipses to unspliced and spliced phase portraits and compute quantile scores.
+    """Fit ellipses to unspliced and spliced phase portraits and compute
+        quantile scores.
 
-    This function fit ellipses to unspliced-spliced phase portraits. The cells are split into
-    four groups (quantiles) based on the axes of the ellipse. Then the function assigns each 
-    quantile a score: -3 for left, -1 for top, 1 for right, and 3 for bottom. These gene-specific
-    values are smoothed with a connectivities matirx. This is similar to the RNA velocity
-    gene time assignment.
+    This function fit ellipses to unspliced-spliced phase portraits. The cells
+    are split into four groups (quantiles) based on the axes of the ellipse.
+    Then the function assigns each quantile a score: -3 for left, -1 for top, 1
+    for right, and 3 for bottom. These gene-specific values are smoothed with a
+    connectivities matrix. This is similar to the RNA velocity gene time
+    assignment.
 
-    In addition, a 2-bit tuple is assigned to each of the four quantiles, (0,0) for left,
-    (1,0) for top, (1,1) for right, and (0,1) for bottom. This is to mimic the distance 
-    relationship between quantiles.
+    In addition, a 2-bit tuple is assigned to each of the four quantiles, (0,0)
+    for left, (1,0) for top, (1,1) for right, and (0,1) for bottom. This is to
+    mimic the distance relationship between quantiles.
 
     Parameters
     ----------
@@ -597,10 +638,10 @@ def compute_quantile_scores(adata,
     quantile_scores_2bit = np.zeros((adata.shape[0], adata.shape[1], 2))
     quantile_gene = np.full(adata.n_vars, False)
     quality_gene_idx = []
-    for idx,gene in enumerate(adata.var_names):
-        u = np.array(adata[:,gene].layers['Mu'])
-        s = np.array(adata[:,gene].layers['Ms'])
-        non_zero = (u>0) & (s>0)
+    for idx, gene in enumerate(adata.var_names):
+        u = np.array(adata[:, gene].layers['Mu'])
+        s = np.array(adata[:, gene].layers['Ms'])
+        non_zero = (u > 0) & (s > 0)
         if np.sum(non_zero) < 10:
             continue
 
@@ -608,17 +649,19 @@ def compute_quantile_scores(adata,
         std_u, std_s = np.std(u[non_zero]), np.std(s[non_zero])
         u_ = (u - mean_u)/std_u
         s_ = (s - mean_s)/std_s
-        X = np.reshape(s_[non_zero], (-1,1))
-        Y = np.reshape(u_[non_zero], (-1,1))
+        X = np.reshape(s_[non_zero], (-1, 1))
+        Y = np.reshape(u_[non_zero], (-1, 1))
 
         # Ax^2 + Bxy + Cy^2 + Dx + Ey + 1 = 0
         A = np.hstack([X**2, X * Y, Y**2, X, Y])
         b = -np.ones_like(X)
-        x,res,_,_ = np.linalg.lstsq(A, b)
+        x, res, _, _ = np.linalg.lstsq(A, b)
         x = x.squeeze()
-        A,B,C,D,E = x
+        A, B, C, D, E = x
         good_fit = B**2 - 4*A*C < 0
-        theta = np.arctan(B/(A - C))/2 if x[0] > x[2] else np.pi/2 + np.arctan(B/(A - C))/2
+        theta = np.arctan(B/(A - C))/2 \
+            if x[0] > x[2] \
+            else np.pi/2 + np.arctan(B/(A - C))/2
         good_fit = good_fit & (theta < np.pi/2) & (theta > 0)
         if not good_fit:
             continue
@@ -626,12 +669,6 @@ def compute_quantile_scores(adata,
         x_coord = np.linspace((-mean_s)/std_s, (np.max(s)-mean_s)/std_s, 500)
         y_coord = np.linspace((-mean_u)/std_u, (np.max(u)-mean_u)/std_u, 500)
         X_coord, Y_coord = np.meshgrid(x_coord, y_coord)
-        Z_coord = A * X_coord**2 + B * X_coord * Y_coord + C * Y_coord**2 + D * X_coord + E * Y_coord + 1
-        M0 = np.array([
-             A, B/2, D/2,
-             B/2, C, E/2,
-             D/2, E/2, 1,
-        ]).reshape(3, 3)
         M = np.array([
             A, B/2,
             B/2, C,
@@ -642,46 +679,54 @@ def compute_quantile_scores(adata,
         slope_major = np.tan(theta)
         theta2 = np.pi/2 + theta
         slope_minor = np.tan(theta2)
-        major = lambda x,y : (y - yc) - (slope_major * (x - xc))
-        minor = lambda x,y : (y - yc) - (slope_minor * (x - xc))
+        major = lambda x, y: (y - yc) - (slope_major * (x - xc))
+        minor = lambda x, y: (y - yc) - (slope_minor * (x - xc))
 
-        quant1 = (major(s_,u_) > 0) & (minor(s_,u_) < 0)
-        quant2 = (major(s_,u_) > 0) & (minor(s_,u_) > 0)
-        quant3 = (major(s_,u_) < 0) & (minor(s_,u_) > 0)
-        quant4 = (major(s_,u_) < 0) & (minor(s_,u_) < 0)
+        quant1 = (major(s_, u_) > 0) & (minor(s_, u_) < 0)
+        quant2 = (major(s_, u_) > 0) & (minor(s_, u_) > 0)
+        quant3 = (major(s_, u_) < 0) & (minor(s_, u_) > 0)
+        quant4 = (major(s_, u_) < 0) & (minor(s_, u_) < 0)
         if (np.sum(quant1 | quant4) < 10) or (np.sum(quant2 | quant3) < 10):
             continue
 
-        quantile_scores[:,idx:idx+1] = (-3.) * quant1 + (-1.) * quant2 + 1. * quant3 + 3. * quant4
-        quantile_scores_2bit[:,idx:idx+1,0] = 1. * (quant1 | quant2)
-        quantile_scores_2bit[:,idx:idx+1,1] = 1. * (quant2 | quant3)
+        quantile_scores[:, idx:idx+1] = ((-3.) * quant1 + (-1.) * quant2 + 1.
+                                         * quant3 + 3. * quant4)
+        quantile_scores_2bit[:, idx:idx+1, 0] = 1. * (quant1 | quant2)
+        quantile_scores_2bit[:, idx:idx+1, 1] = 1. * (quant2 | quant3)
         quality_gene_idx.append(idx)
 
     quantile_scores = csr_matrix.dot(conn_norm, quantile_scores)
-    quantile_scores_2bit[:,:,0] = csr_matrix.dot(conn_norm, quantile_scores_2bit[:,:,0])
-    quantile_scores_2bit[:,:,1] = csr_matrix.dot(conn_norm, quantile_scores_2bit[:,:,1])
+    quantile_scores_2bit[:, :, 0] = csr_matrix.dot(conn_norm,
+                                                   quantile_scores_2bit[:,
+                                                                        :, 0])
+    quantile_scores_2bit[:, :, 1] = csr_matrix.dot(conn_norm,
+                                                   quantile_scores_2bit[:,
+                                                                        :, 1])
     adata.layers['quantile_scores'] = quantile_scores
-    adata.layers['quantile_scores_1st_bit'] = quantile_scores_2bit[:,:,0]
-    adata.layers['quantile_scores_2nd_bit'] = quantile_scores_2bit[:,:,1]
+    adata.layers['quantile_scores_1st_bit'] = quantile_scores_2bit[:, :, 0]
+    adata.layers['quantile_scores_2nd_bit'] = quantile_scores_2bit[:, :, 1]
     quantile_gene[quality_gene_idx] = True
 
     if verbose:
         perc_good = np.sum(quantile_gene) / adata.n_vars * 100
-        print(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}% genes have good ellipse fits')
+        print(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}%'
+              'genes have good ellipse fits')
 
-    adata.obs['quantile_score_sum'] = np.sum(adata[:,quantile_gene].layers['quantile_scores'], axis=1)
+    adata.obs['quantile_score_sum'] = \
+        np.sum(adata[:, quantile_gene].layers['quantile_scores'], axis=1)
     adata.var['quantile_genes'] = quantile_gene
 
 
-def cluster_by_quantile(adata, 
-                        plot=False, 
-                        n_clusters=None, 
-                        affinity='euclidean', 
+def cluster_by_quantile(adata,
+                        plot=False,
+                        n_clusters=None,
+                        affinity='euclidean',
                         linkage='ward'
                         ):
     """Cluster genes based on 2-bit quantile scores.
 
-    This function cluster similar genes based on their 2-bit quantile score assignments from ellipse fit.
+    This function cluster similar genes based on their 2-bit quantile score
+    assignments from ellipse fit.
     Hierarchical cluster is done with `sklean.cluster.AgglomerativeClustering`.
 
     Parameters
@@ -693,9 +738,11 @@ def cluster_by_quantile(adata,
     n_clusters: `int` (default: None)
         The number of clusters to keep.
     affinity: `str` (default: `euclidean`)
-        Metric used to compute linkage. Passed to `sklean.cluster.AgglomerativeClustering`.
+        Metric used to compute linkage. Passed to
+        `sklean.cluster.AgglomerativeClustering`.
     linkage: `str` (default: `ward`)
-        Linkage criterion to use. Passed to `sklean.cluster.AgglomerativeClustering`.
+        Linkage criterion to use. Passed to
+        `sklean.cluster.AgglomerativeClustering`.
 
     Returns
     -------
@@ -704,11 +751,19 @@ def cluster_by_quantile(adata,
     """
     from sklearn.cluster import AgglomerativeClustering
     if 'quantile_scores_1st_bit' not in adata.layers.keys():
-        raise ValueError("Quantile scores not found. Please run compute_quantile_scores function first.")
+        raise ValueError("Quantile scores not found. Please run "
+                         "compute_quantile_scores function first.")
     quantile_gene = adata.var['quantile_genes']
     if plot or n_clusters is None:
-        cluster = AgglomerativeClustering(distance_threshold=0, n_clusters=None, affinity=affinity, linkage=linkage)
-        cluster = cluster.fit(np.vstack((adata[:,quantile_gene].layers['quantile_scores_1st_bit'], adata[:,quantile_gene].layers['quantile_scores_2nd_bit'])).transpose())
+        cluster = AgglomerativeClustering(distance_threshold=0,
+                                          n_clusters=None,
+                                          affinity=affinity,
+                                          linkage=linkage)
+        cluster = cluster.fit(np.vstack((adata[:, quantile_gene]
+                                         .layers['quantile_scores_1st_bit'],
+                                         adata[:, quantile_gene]
+                                         .layers['quantile_scores_2nd_bit']))
+                                .transpose())
 
         # https://scikit-learn.org/stable/auto_examples/cluster/plot_agglomerative_dendrogram.html
         def plot_dendrogram(model, **kwargs):
@@ -723,15 +778,23 @@ def cluster_by_quantile(adata,
                     else:
                         current_count += counts[child_idx - n_samples]
                 counts[i] = current_count
-            linkage_matrix = np.column_stack([model.children_, model.distances_, counts]).astype(float)
+            linkage_matrix = np.column_stack([model.children_,
+                                              model.distances_,
+                                              counts]).astype(float)
             dendrogram(linkage_matrix, **kwargs)
 
         plot_dendrogram(cluster, truncate_mode='level', p=5, no_labels=True)
 
     if n_clusters is not None:
         n_clusters = int(n_clusters)
-        cluster = AgglomerativeClustering(n_clusters=n_clusters, affinity=affinity, linkage=linkage)
-        cluster = cluster.fit_predict(np.vstack((adata[:,quantile_gene].layers['quantile_scores_1st_bit'], adata[:,quantile_gene].layers['quantile_scores_2nd_bit'])).transpose())
+        cluster = AgglomerativeClustering(n_clusters=n_clusters,
+                                          affinity=affinity,
+                                          linkage=linkage)
+        cluster = cluster.fit_predict(np.vstack((adata[:, quantile_gene].layers
+                                                 ['quantile_scores_1st_bit'],
+                                                 adata[:, quantile_gene].layers
+                                                 ['quantile_scores_2nd_bit']))
+                                        .transpose())
         quantile_cluster = np.full(adata.n_vars, -1)
         quantile_cluster[quantile_gene] = cluster
         adata.var['quantile_cluster'] = quantile_cluster
