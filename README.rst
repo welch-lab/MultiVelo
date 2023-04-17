@@ -15,15 +15,15 @@ the degree of concordance or discordance between transcriptomic and epigenomic s
 each cell, and inferred the lengths of time lags between transcriptomic and epigenomic changes.
 
 Install through PyPI: **pip install multivelo**
+The package is also available on Bioconda. Install with **conda install -c bioconda multivelo** or **mamba install -c bioconda multivelo**
 
-**New**: Now available on Bioconda. Install with **conda install -c bioconda multivelo** or **mamba install -c bioconda multivelo**
+We also have a `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page.
 
-**New**: `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page is up. You can find detailed parameter descriptions and tutorials on the website.
+*New*: we have added Jupyter notebooks showing how to reproduce the main figure panels, along with all required processed data files.
 
-A tutorial showing how to run MultiVelo can be found in `multivelo_demo <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo>`_.
+A tutorial showing how to run MultiVelo can be found here: `jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`
 
-We use the embryonic E18 mouse brain from 10X Multiome as an example (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_).
-
+The tutorial uses the embryonic E18 mouse brain from 10X Multiome as an example (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_).
 CellRanger output files can be downloaded from 
 `10X website <https://www.10xgenomics.com/resources/datasets/fresh-embryonic-e-18-mouse-brain-5-k-1-standard-1-0-0>`_. 
 Crucially, the filtered feature barcode matrix folder, ATAC peak annotations TSV, and the feature 
