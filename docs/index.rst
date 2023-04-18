@@ -33,6 +33,11 @@ Check out the :doc:`usage` section for further information.
    :hidden:
 
    MultiVelo_Demo
+   MultiVelo_Fig2
+   MultiVelo_Fig3
+   MultiVelo_Fig4
+   MultiVelo_Fig5
+   MultiVelo_Fig6
 
 
 .. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow
