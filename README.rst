@@ -14,14 +14,28 @@ datasets revealed two distinct mechanisms of regulation by chromatin accessibili
 the degree of concordance or discordance between transcriptomic and epigenomic states within 
 each cell, and inferred the lengths of time lags between transcriptomic and epigenomic changes.
 
-Install through PyPI: **pip install multivelo**
-The package is also available on Bioconda. Install with **conda install -c bioconda multivelo** or **mamba install -c bioconda multivelo**
+Installation
+------------
 
-We also have a `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page.
+Install through PyPI: 
 
-*New*: we have added Jupyter notebooks showing how to reproduce the main figure panels, along with all required processed data files.
+``pip install multivelo``
 
-A tutorial showing how to run MultiVelo can be found here: (`jupyter notebook <https://github.com/welch-lab/MultiVelo/tree/main/multivelo_demo/MultiVelo_Demo.ipynb>`_)
+The package is also available on Bioconda. Install with:
+
+``conda install -c bioconda multivelo`` or ``mamba install -c bioconda multivelo``
+
+Documentation
+-------------
+
+We have a `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page.
+
+Tutorial
+--------
+
+*New*: we have added Jupyter notebooks showing how to reproduce the main figure panels, along with all required processed data files. These can be found under the `Examples <https://github.com/welch-lab/MultiVelo/tree/main/Examples>`_ folder in this repository or on our `ReadTheDocs <https://multivelo.readthedocs.io/en/latest/>`_ page.
+
+A tutorial showing how to run MultiVelo can be found here: (`jupyter notebook <https://github.com/welch-lab/MultiVelo/blob/main/Examples/MultiVelo_Demo.ipynb>`_)
 
 The tutorial uses the embryonic E18 mouse brain from 10X Multiome as an example.
 CellRanger output files can be downloaded from 
@@ -36,5 +50,7 @@ We also provide the nearest neighbor graph used to smooth chromatin accessibilit
 which contains a zip file of three files: "nn_cells.txt", "nn_dist.txt", and "nn_idx.txt". Please unzip the archive after downloading. 
 The R script used to generate these files can also be found in the same folder.
 
-| Citation:
+Citation
+--------
+
 | Li, C., Virgilio, M.C., Collins, K.L. & Welch J.D. Multi-omic single-cell velocity models epigenome–transcriptome interactions and improves cell fate prediction. *Nat Biotechnol* (2022).
