@@ -1,19 +1,15 @@
 import pytest
 
-import os
-import scipy
 import numpy as np
 import pandas as pd
-import math
 import sys
 import multivelo as mv
 import scanpy as sc
 import scvelo as scv
-import matplotlib.pyplot as plt
-import requests
 sys.path.append("/../Examples")
 
 # ****** FIG 4 TESTS ******
+
 
 @pytest.fixture(scope="session")
 def result_data_4():
@@ -30,9 +26,9 @@ def result_data_4():
     # read in the original AnnData objects
     rna_url = "https://figshare.com/ndownloader/files/40064275"
     atac_url = "https://figshare.com/ndownloader/files/40064278"
-   
-    rna_path = "adata_postpro.h5ad"
-    atac_path = "adata_atac_postpro.h5ad"
+
+    rna_path = "Examples/adata_postpro.h5ad"
+    atac_path = "Examples/adata_atac_postpro.h5ad"
 
     adata_rna = sc.read(rna_path, backup_url=rna_url)
     adata_atac = sc.read(atac_path, backup_url=atac_url)
@@ -40,19 +36,12 @@ def result_data_4():
     # subset genes to run faster
     gene_list = ["Shh", "Heg1", "Cux1", "Lef1"]
 
-    # Run scVelo preprocessing
-    # scv.tl.recover_dynamics(adata_rna, n_jobs=6)
-    # scv.tl.velocity(adata_rna, mode="dynamical")
-    # scv.tl.velocity_graph(adata_rna, n_jobs=1)
-    # scv.tl.latent_time(adata_rna)
-    # scv.pl.velocity_embedding_stream(adata_rna, basis='umap', color='celltype')
-
     print("Running multivelo")
 
     # run multivelo
+
     adata_result = mv.recover_dynamics_chrom(adata_rna,
                                              adata_atac,
-                                             # gene_list=["Shh", "Heg1", "Cux1"],
                                              gene_list=gene_list,
                                              max_iter=5,
                                              init_mode="invert",
@@ -67,6 +56,9 @@ def result_data_4():
 
     return adata_result
 
+
+# the next three tests check to see if recover_dynamics_chrom calculated
+# the correct parameters for each of our four genes
 def test_alpha(result_data_4):
     alpha = result_data_4.var["fit_alpha"]
 
@@ -84,6 +76,7 @@ def test_beta(result_data_4):
     assert beta[2] == 0.564865749852349
     assert beta[3] == 0.2522643118709811
 
+
 def test_gamma(result_data_4):
     gamma = result_data_4.var["fit_gamma"]
 
@@ -93,6 +86,7 @@ def test_gamma(result_data_4):
     assert gamma[3] == 0.7485734061079243
 
 
+# tests the latent_time function
 def test_latent_time(result_data_4):
 
     print("Running latent time")
@@ -108,6 +102,7 @@ def test_latent_time(result_data_4):
     assert latent_time[5999] == 0.3094818569923423
 
 
+# test the velocity_graph function
 def test_velo_graph(result_data_4):
 
     print("Running velocity graph")
@@ -116,12 +111,14 @@ def test_velo_graph(result_data_4):
 
     digits = 8
 
-    v_graph = result_data_4.uns["velo_s_norm_graph"].data
+    v_graph_mat = result_data_4.uns["velo_s_norm_graph"].tocoo()
+
+    v_graph = v_graph_mat.data
     v_graph = v_graph.astype(float)
     v_graph = v_graph.round(decimals=digits)
 
-    v_graph_rows = result_data_4.uns["velo_s_norm_graph"].tocoo().row
-    v_graph_cols = result_data_4.uns["velo_s_norm_graph"].tocoo().col
+    v_graph_rows = v_graph_mat.row
+    v_graph_cols = v_graph_mat.col
 
     assert len(v_graph) == 1883599
     assert v_graph[0] == 1.0

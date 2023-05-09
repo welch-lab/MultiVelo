@@ -1,0 +1,28 @@
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+    branches: [main, next]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -e {0} # -e to fail on error
+
+    steps:
+      # Check
+      - name: Set up pre-commit cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-3|${{ matrix.python }}|${{ hashFiles(format('{0}/.pre-commit-config.yaml', env.PROJECT_ROOT)) }}
+      - name: Run pre-commit
+        run: |
+          pre-commit run --verbose --color=always --show-diff-on-failure --all-files
+      
+      - name: Test with pytest
+        run: |
+          python -m pytest
+
