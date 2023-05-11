@@ -3535,7 +3535,8 @@ def velocity_embedding_stream(adata, vkey='velo_s', show=True, **kwargs):
         adata.var[vkey+'_norm_genes'] = adata.var[vkey+'_genes']
     if vkey+'_norm_graph' not in adata.uns.keys():
         velocity_graph(adata, vkey=vkey, **kwargs)
-    out = scv.pl.velocity_embedding_stream(adata, vkey=vkey+'_norm', **kwargs)
+    out = scv.pl.velocity_embedding_stream(adata, vkey=vkey+'_norm', show=show,
+                                           **kwargs)
     if not show:
         return out
 
