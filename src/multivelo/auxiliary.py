@@ -383,16 +383,19 @@ def calculate_qc_metrics(adata, **kwargs):
     cell_cycle_score: `.var`
         cell cycle score difference between G2M_score and S_score.
     """
+    print("Running from here!")
     sc.pp.calculate_qc_metrics(adata, **kwargs)
     if 'spliced' not in adata.layers:
         raise ValueError('Spliced matrix not found in adata.layers')
     if 'unspliced' not in adata.layers:
         raise ValueError('Unspliced matrix not found in adata.layers')
-    total_s = np.nansum(adata.layers['spliced'], axis=1)
-    total_u = np.nansum(adata.layers['unspliced'], axis=1)
-    adata.var['total_unspliced'] = total_u
-    adata.var['total_spliced'] = total_s
-    adata.var['unspliced_ratio'] = total_u / (total_s + total_u)
+    print(adata.layers['spliced'].shape)
+    total_s = np.nansum(adata.layers['spliced'].toarray(), axis=1)
+    total_u = np.nansum(adata.layers['unspliced'].toarray(), axis=1)
+    print(total_u.shape)
+    adata.obs['total_unspliced'] = total_u
+    adata.obs['total_spliced'] = total_s
+    adata.obs['unspliced_ratio'] = total_u / (total_s + total_u)
     scv.tl.score_genes_cell_cycle(adata)
     adata.obs['cell_cycle_score'] = (adata.obs['G2M_score']
                                      - adata.obs['S_score'])
