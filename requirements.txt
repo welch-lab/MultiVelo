@@ -14,9 +14,5 @@ matplotlib>=3.3.0
 seaborn>=0.11.0
 tqdm
 joblib
-<<<<<<< HEAD
-ipywidgets
-pre-commit
-=======
 ipywidgets<=7.7.1
->>>>>>> origin/next
+pre-commit
