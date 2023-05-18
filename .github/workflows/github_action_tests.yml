@@ -29,6 +29,9 @@ jobs:
 
     steps:
       # Check
+      - name: Install requirements
+        run: |
+          pip3 install -r requirements.txt
       - name: Set up pre-commit cache
         uses: actions/cache@v3
         with:
