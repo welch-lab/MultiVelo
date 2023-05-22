@@ -1,3 +1,5 @@
+name: Test
+
 on:
   push:
     branches: [main, next]
@@ -29,6 +31,10 @@ jobs:
 
     steps:
       # Check
+      - uses: actions/checkout@v2
+      - name: Install Ubuntu system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install pandoc
       - name: Install requirements
         run: |
           pip3 install -r ../../requirements.txt
@@ -39,8 +45,14 @@ jobs:
           key: pre-commit-3|${{ matrix.python }}|${{ hashFiles(format('{0}/.pre-commit-config.yaml', env.PROJECT_ROOT)) }}
       - name: Run pre-commit
         run: |
+          cd "$PROJECT_ROOT"
+          git add .
           pre-commit run --verbose --color=always --show-diff-on-failure --all-files
-      
+      - name: Install the package
+        run: |
+          cd $PROJECT_ROOT
+          pip install ".[doc]"
+          python -c "import ${{ matrix.package-name }}"
       - name: Test with pytest
         run: |
           python -m pytest
