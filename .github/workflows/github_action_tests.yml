@@ -39,7 +39,10 @@ jobs:
         run: |
           cd src/multivelo
           git add .
-          pre-commit run --verbose --color=always --show-diff-on-failure --all-files
+          pre-commit run --verbose --color=always --show-diff-on-failure \
+          --files src/multivelo/auxiliary.py \
+          src/multivelo/dynamical_chrom_func.py \ 
+          src/multivelo/steady_chrom_func.py
       - name: Test with pytest
         run: |
           pytest

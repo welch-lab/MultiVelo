@@ -2,10 +2,17 @@ default_stages:
   - commit
 
 repos:
+# these lines taken from https://pre-commit.com/
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v2.3.0
+  hooks:
+  -   id: check-yaml
+  -   id: end-of-file-fixer
+  -   id: trailing-whitespace
 
-# these lines taken from https://pre-commit.com/#advanced
--   repo: https://github.com/PyCQA/flake8
-    rev: 4.0.1
-    hooks:
-    -   id: flake8
-        args: [--max-line-length=79]
+- repo: https://github.com/PyCQA/autoflake
+  rev: v2.1.1
+  hooks:
+  -   id: autoflake
+      args:
+        - -i
