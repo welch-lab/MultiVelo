@@ -3563,7 +3563,7 @@ def latent_time(adata, vkey='velo_s', **kwargs):
                          'multivelo.recover_dynamics_chrom function first.')
     if vkey+'_norm' not in adata.layers.keys():
         raise ValueError('Normalized velocity matrix is not found. Please '
-                         'multivelo.run velocity_graph function first.')
+                         'run multivelo.velocity_graph function first.')
     if vkey+'_norm_graph' not in adata.uns.keys():
         velocity_graph(adata, vkey=vkey, **kwargs)
     scv.tl.latent_time(adata, vkey=vkey+'_norm', **kwargs)
