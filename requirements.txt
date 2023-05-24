@@ -16,3 +16,4 @@ tqdm
 joblib
 ipywidgets<=7.7.1
 pre-commit
+pytest
