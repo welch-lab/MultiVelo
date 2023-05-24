@@ -57,28 +57,28 @@ def result_data_4():
 def test_alpha(result_data_4):
     alpha = result_data_4.var["fit_alpha"]
 
-    assert alpha[0] == 0.45878197934025416
-    assert alpha[1] == 0.08032904996744818
-    assert alpha[2] == 1.5346878202804608
-    assert alpha[3] == 0.9652887906148591
+    assert alpha[0] == pytest.approx(0.45878197934025416)
+    assert alpha[1] == pytest.approx(0.08032904996744818)
+    assert alpha[2] == pytest.approx(1.5346878202804608)
+    assert alpha[3] == pytest.approx(0.9652887906148591)
 
 
 def test_beta(result_data_4):
     beta = result_data_4.var["fit_beta"]
 
-    assert beta[0] == 0.28770367567423
-    assert beta[1] == 0.14497469719573167
-    assert beta[2] == 0.564865749852349
-    assert beta[3] == 0.2522643118709811
+    assert beta[0] == pytest.approx(0.28770367567423)
+    assert beta[1] == pytest.approx(0.14497469719573167)
+    assert beta[2] == pytest.approx(0.564865749852349)
+    assert beta[3] == pytest.approx(0.2522643118709811)
 
 
 def test_gamma(result_data_4):
     gamma = result_data_4.var["fit_gamma"]
 
-    assert gamma[0] == 0.19648836445315102
-    assert gamma[1] == 0.07703610603664116
-    assert gamma[2] == 1.0079569101225154
-    assert gamma[3] == 0.7485734061079243
+    assert gamma[0] == pytest.approx(0.19648836445315102)
+    assert gamma[1] == pytest.approx(0.07703610603664116)
+    assert gamma[2] == pytest.approx(1.0079569101225154)
+    assert gamma[3] == pytest.approx(0.7485734061079243)
 
 
 def test_embedding_stream(result_data_4):
@@ -110,10 +110,10 @@ def test_latent_time(result_data_4):
 
     latent_time = result_data_4.obs["latent_time"]
 
-    assert latent_time[0] == 0.248071171005419
-    assert latent_time[2000] == 0.21541765304361474
-    assert latent_time[4000] == 0.2922034744178431
-    assert latent_time[5999] == 0.3094818569923423
+    assert latent_time[0] == pytest.approx(0.248071171005419)
+    assert latent_time[2000] == pytest.approx(0.21541765304361474)
+    assert latent_time[4000] == pytest.approx(0.2922034744178431)
+    assert latent_time[5999] == pytest.approx(0.3094818569923423)
 
 
 # test the velocity_graph function
