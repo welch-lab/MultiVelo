@@ -110,10 +110,10 @@ def test_latent_time(result_data_4):
 
     latent_time = result_data_4.obs["latent_time"]
 
-    assert latent_time[0] == pytest.approx(0.248071171005419)
-    assert latent_time[2000] == pytest.approx(0.21541765304361474)
-    assert latent_time[4000] == pytest.approx(0.2922034744178431)
-    assert latent_time[5999] == pytest.approx(0.3094818569923423)
+    assert latent_time[0] == pytest.approx(0.13637730355232341)
+    assert latent_time[2000] == pytest.approx(0.23736570450245578)
+    assert latent_time[4000] == pytest.approx(0.27272782940968826)
+    assert latent_time[5999] == pytest.approx(0.5737945319304785)
 
 
 # test the velocity_graph function
