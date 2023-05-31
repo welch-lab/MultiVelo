@@ -25,9 +25,9 @@ jobs:
             python: "3.9"
           - os: windows-latest
             python: "3.10"
-          - os: macos-latest
+          - os: macos-11
             python: "3.9"
-          - os: macos-latest
+          - os: macos-11
             python: "3.10"
 
     env:
