@@ -21,9 +21,14 @@ jobs:
             python: "3.9"
           - os: ubuntu-latest
             python: "3.10"
-          - os: ubuntu-latest
+          - os: windows-latest
+            python: "3.9"
+          - os: windows-latest
             python: "3.10"
-            pip-flags: "--pre"
+          - os: macos-latest
+            python: "3.9"
+          - os: macos-latest
+            python: "3.10"
 
     env:
       OS: ${{ matrix.os }}
