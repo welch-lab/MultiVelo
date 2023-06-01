@@ -67,14 +67,14 @@ def predict_exp(tau,
 
 
 @jit(nopython=True, fastmath=True)
-def generate_exp(tau_list, 
-                 t_sw_array, 
-                 alpha_c, 
-                 alpha, 
-                 beta, 
-                 gamma, 
-                 scale_cc=1, 
-                 model=1, 
+def generate_exp(tau_list,
+                 t_sw_array,
+                 alpha_c,
+                 alpha,
+                 beta,
+                 gamma,
+                 scale_cc=1,
+                 model=1,
                  rna_only=False):
 
     if beta == alpha_c:
@@ -94,21 +94,21 @@ def generate_exp(tau_list,
     if tau_list is None:
         if model == 0:
             if switch >= 1:
-                exp_sw1 = predict_exp(tau_sw1, 0, 0, 0, alpha_c, alpha, beta, 
-                                      gamma, pred_r=False, scale_cc=scale_cc, 
+                exp_sw1 = predict_exp(tau_sw1, 0, 0, 0, alpha_c, alpha, beta,
+                                      gamma, pred_r=False, scale_cc=scale_cc,
                                       rna_only=rna_only)
                 if switch >= 2:
-                    exp_sw2 = predict_exp(tau_sw2, exp_sw1[0, 0], 
-                                          exp_sw1[0, 1], exp_sw1[0, 2], 
+                    exp_sw2 = predict_exp(tau_sw2, exp_sw1[0, 0],
+                                          exp_sw1[0, 1], exp_sw1[0, 2],
                                           alpha_c, alpha, beta, gamma,
-                                          pred_r=False, chrom_open=False, 
+                                          pred_r=False, chrom_open=False,
                                           scale_cc=scale_cc, rna_only=rna_only)
                     if switch >= 3:
-                        exp_sw3 = predict_exp(tau_sw3, exp_sw2[0, 0], 
+                        exp_sw3 = predict_exp(tau_sw3, exp_sw2[0, 0],
                                               exp_sw2[0, 1], exp_sw2[0, 2],
                                               alpha_c, alpha, beta, gamma,
-                                              chrom_open=False, 
-                                              scale_cc=scale_cc, 
+                                              chrom_open=False,
+                                              scale_cc=scale_cc,
                                               rna_only=rna_only)
         elif model == 1:
             if switch >= 1:
@@ -116,12 +116,12 @@ def generate_exp(tau_list,
                                       gamma, pred_r=False, scale_cc=scale_cc,
                                       rna_only=rna_only)
                 if switch >= 2:
-                    exp_sw2 = predict_exp(tau_sw2, exp_sw1[0, 0], 
-                                          exp_sw1[0, 1], exp_sw1[0, 2], 
-                                          alpha_c, alpha, beta, gamma, 
+                    exp_sw2 = predict_exp(tau_sw2, exp_sw1[0, 0],
+                                          exp_sw1[0, 1], exp_sw1[0, 2],
+                                          alpha_c, alpha, beta, gamma,
                                           scale_cc=scale_cc, rna_only=rna_only)
                     if switch >= 3:
-                        exp_sw3 = predict_exp(tau_sw3, exp_sw2[0, 0], 
+                        exp_sw3 = predict_exp(tau_sw3, exp_sw2[0, 0],
                                               exp_sw2[0, 1], exp_sw2[0, 2],
                                               alpha_c, alpha, beta, gamma,
                                               chrom_open=False,
@@ -133,7 +133,7 @@ def generate_exp(tau_list,
                                       gamma, pred_r=False, scale_cc=scale_cc,
                                       rna_only=rna_only)
                 if switch >= 2:
-                    exp_sw2 = predict_exp(tau_sw2, exp_sw1[0, 0], 
+                    exp_sw2 = predict_exp(tau_sw2, exp_sw1[0, 0],
                                           exp_sw1[0, 1], exp_sw1[0, 2],
                                           alpha_c, alpha, beta, gamma,
                                           scale_cc=scale_cc, rna_only=rna_only)
@@ -143,7 +143,7 @@ def generate_exp(tau_list,
                                               alpha_c, 0, beta, gamma,
                                               scale_cc=scale_cc,
                                               rna_only=rna_only)
-                        
+
         return (np.empty((0, 3)), np.empty((0, 3)), np.empty((0, 3)),
                 np.empty((0, 3))), (exp_sw1, exp_sw2, exp_sw3)
 
@@ -154,7 +154,7 @@ def generate_exp(tau_list,
             tau3 = tau_list[2]
             if switch == 3:
                 tau4 = tau_list[3]
-    exp1, exp2, exp3, exp4 = (np.empty((0, 3)), np.empty((0, 3)), 
+    exp1, exp2, exp3, exp4 = (np.empty((0, 3)), np.empty((0, 3)),
                               np.empty((0, 3)), np.empty((0, 3)))
     if model == 0:
         exp1 = predict_exp(tau1, 0, 0, 0, alpha_c, alpha, beta, gamma,
@@ -182,15 +182,15 @@ def generate_exp(tau_list,
                                           alpha_c, alpha, beta, gamma,
                                           chrom_open=False, scale_cc=scale_cc,
                                           rna_only=rna_only)
-                    exp4 = predict_exp(tau4, exp_sw3[0, 0], exp_sw3[0, 1], 
+                    exp4 = predict_exp(tau4, exp_sw3[0, 0], exp_sw3[0, 1],
                                        exp_sw3[0, 2], alpha_c, 0, beta, gamma,
                                        chrom_open=False, scale_cc=scale_cc,
                                        rna_only=rna_only)
     elif model == 1:
-        exp1 = predict_exp(tau1, 0, 0, 0, alpha_c, alpha, beta, gamma, 
+        exp1 = predict_exp(tau1, 0, 0, 0, alpha_c, alpha, beta, gamma,
                            pred_r=False, scale_cc=scale_cc, rna_only=rna_only)
         if switch >= 1:
-            exp_sw1 = predict_exp(tau_sw1, 0, 0, 0, alpha_c, alpha, beta, 
+            exp_sw1 = predict_exp(tau_sw1, 0, 0, 0, alpha_c, alpha, beta,
                                   gamma, pred_r=False, scale_cc=scale_cc,
                                   rna_only=rna_only)
             exp2 = predict_exp(tau2, exp_sw1[0, 0], exp_sw1[0, 1],
@@ -230,13 +230,13 @@ def generate_exp(tau_list,
                                       exp_sw1[0, 2], alpha_c, alpha, beta,
                                       gamma, scale_cc=scale_cc,
                                       rna_only=rna_only)
-                exp3 = predict_exp(tau3, exp_sw2[0, 0], exp_sw2[0, 1], 
+                exp3 = predict_exp(tau3, exp_sw2[0, 0], exp_sw2[0, 1],
                                    exp_sw2[0, 2], alpha_c, 0, beta, gamma,
                                    scale_cc=scale_cc, rna_only=rna_only)
                 if switch == 3:
                     exp_sw3 = predict_exp(tau_sw3, exp_sw2[0, 0],
-                                          exp_sw2[0, 1], exp_sw2[0, 2], 
-                                          alpha_c, 0, beta, gamma, 
+                                          exp_sw2[0, 1], exp_sw2[0, 2],
+                                          alpha_c, 0, beta, gamma,
                                           scale_cc=scale_cc, rna_only=rna_only)
                     exp4 = predict_exp(tau4, exp_sw3[0, 0], exp_sw3[0, 1],
                                        exp_sw3[0, 2], alpha_c, 0, beta, gamma,
@@ -282,7 +282,7 @@ def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
                                   exp_sw1[0, 2], alpha_c, 0, beta, gamma,
                                   scale_cc=scale_cc, backward=True)
         return (np.empty((0, 0)),
-                np.empty((0, 0)), 
+                np.empty((0, 0)),
                 np.empty((0, 0))), (exp_sw1, exp_sw2)
 
     tau1 = tau_list[0]
@@ -403,26 +403,26 @@ def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
             return -alpha_c * c, np.zeros(len(u)), np.zeros(len(u))
     else:
         if pred_r:
-            return (alpha_c - alpha_c * c), (alpha * c - beta * u), (beta * u 
-                                                                     - gamma 
+            return (alpha_c - alpha_c * c), (alpha * c - beta * u), (beta * u
+                                                                     - gamma
                                                                      * s)
         else:
             return alpha_c - alpha_c * c, np.zeros(len(u)), np.zeros(len(u))
 
 
 @jit(nopython=True, fastmath=True)
-def compute_velocity(t, 
-                     t_sw_array, 
-                     state, 
-                     alpha_c, 
-                     alpha, 
-                     beta, 
-                     gamma, 
-                     rescale_c, 
-                     rescale_u, 
-                     scale_cc=1, 
-                     model=1, 
-                     total_h=20, 
+def compute_velocity(t,
+                     t_sw_array,
+                     state,
+                     alpha_c,
+                     alpha,
+                     beta,
+                     gamma,
+                     rescale_c,
+                     rescale_u,
+                     scale_cc=1,
+                     model=1,
+                     total_h=20,
                      rna_only=False):
 
     if state is None:
@@ -444,14 +444,14 @@ def compute_velocity(t,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    exp_list, exp_sw_list = generate_exp(typed_tau_list, 
-                                         t_sw_array[:switch], 
-                                         alpha_c, 
-                                         alpha, 
-                                         beta, 
-                                         gamma, 
-                                         model=model, 
-                                         scale_cc=scale_cc, 
+    exp_list, exp_sw_list = generate_exp(typed_tau_list,
+                                         t_sw_array[:switch],
+                                         alpha_c,
+                                         alpha,
+                                         beta,
+                                         gamma,
+                                         model=model,
+                                         scale_cc=scale_cc,
                                          rna_only=rna_only)
 
     c = np.empty(len(t))
@@ -548,14 +548,14 @@ def approx_tau(u, s, u0, s0, alpha, beta, gamma):
         s_inf_new = s_inf - b_new * u_inf
         s_new = s - b_new * u
         s0_new = s0 - b_new * u0
-        tau = -1.0 / gamma * log_valid((s_new - s_inf_new) / 
+        tau = -1.0 / gamma * log_valid((s_new - s_inf_new) /
                                        (s0_new - s_inf_new))
     else:
         tau = -1.0 / beta * log_valid((u - u_inf) / (u0 - u_inf))
     return tau
 
 
-def anchor_points(t_sw_array, total_h=20, t=1000, mode='uniform', 
+def anchor_points(t_sw_array, total_h=20, t=1000, mode='uniform',
                   return_time=False):
     t_ = np.linspace(0, total_h, t)
     tau1 = t_[t_ <= t_sw_array[0]]
@@ -597,17 +597,17 @@ def pairwise_distance_square(X, Y):
     return res
 
 
-def calculate_dist_and_time(c, u, s, 
-                            t_sw_array, 
-                            alpha_c, alpha, beta, gamma, 
-                            rescale_c, rescale_u, 
-                            scale_cc=1, 
-                            scale_factor=None, 
-                            model=1, 
-                            conn=None, 
-                            t=1000, k=1, 
-                            direction='complete', 
-                            total_h=20, 
+def calculate_dist_and_time(c, u, s,
+                            t_sw_array,
+                            alpha_c, alpha, beta, gamma,
+                            rescale_c, rescale_u,
+                            scale_cc=1,
+                            scale_factor=None,
+                            model=1,
+                            conn=None,
+                            t=1000, k=1,
+                            direction='complete',
+                            total_h=20,
                             rna_only=False,
                             penalize_gap=True,
                             all_cells=True):
@@ -619,14 +619,14 @@ def calculate_dist_and_time(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    exp_list, exp_sw_list = generate_exp(typed_tau_list, 
-                                         t_sw_array[:switch], 
-                                         alpha_c, 
-                                         alpha, 
-                                         beta, 
-                                         gamma, 
-                                         model=model, 
-                                         scale_cc=scale_cc, 
+    exp_list, exp_sw_list = generate_exp(typed_tau_list,
+                                         t_sw_array[:switch],
+                                         alpha_c,
+                                         alpha,
+                                         beta,
+                                         gamma,
+                                         model=model,
+                                         scale_cc=scale_cc,
                                          rna_only=rna_only)
     rescale_factor = np.array([rescale_c, rescale_u, 1.0])
     exp_list = [x*rescale_factor for x in exp_list]
@@ -638,7 +638,7 @@ def calculate_dist_and_time(c, u, s,
         exp_mat = (np.hstack((np.reshape(u, (-1, 1)), np.reshape(s, (-1, 1))))
                    / scale_factor[1:])
     else:
-        exp_mat = np.hstack((np.reshape(c, (-1, 1)), np.reshape(u, (-1, 1)), 
+        exp_mat = np.hstack((np.reshape(c, (-1, 1)), np.reshape(u, (-1, 1)),
                              np.reshape(s, (-1, 1)))) / scale_factor
 
     dists = np.full((n, 4), np.inf)
@@ -766,7 +766,7 @@ def calculate_dist_and_time(c, u, s,
         exp_ss_mat = compute_ss_exp(alpha_c, alpha, beta, gamma, model=model)
         if rna_only:
             exp_ss_mat[:, 0] = 1
-        dists_ss = pairwise_distance_square(exp_mat, exp_ss_mat * 
+        dists_ss = pairwise_distance_square(exp_mat, exp_ss_mat *
                                             rescale_factor / scale_factor)
 
         reach_ss = np.full((n, 4), False)
@@ -816,14 +816,14 @@ def compute_likelihood(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    exp_list, _ = generate_exp(typed_tau_list, 
-                               t_sw_array[:switch], 
-                               alpha_c, 
-                               alpha, 
-                               beta, 
-                               gamma, 
-                               model=model, 
-                               scale_cc=scale_cc, 
+    exp_list, _ = generate_exp(typed_tau_list,
+                               t_sw_array[:switch],
+                               alpha_c,
+                               alpha,
+                               beta,
+                               gamma,
+                               model=model,
+                               scale_cc=scale_cc,
                                rna_only=rna_only)
     rescale_factor = np.array([rescale_c, rescale_u, 1.0])
     exp_list = [x*rescale_factor*scale_factor for x in exp_list]
@@ -1661,8 +1661,8 @@ class ChromatinDynamical:
                     print('Nelder Mead on t_sw_2 and alpha..')
                 self.fitting_flag_ = 0
                 if self.cur_iter == 1:
-                    var_test = (self.alpha + 
-                                np.array([-2, -1, -0.5, 0.5, 1, 2]) * 0.1 
+                    var_test = (self.alpha +
+                                np.array([-2, -1, -0.5, 0.5, 1, 2]) * 0.1
                                 * self.alpha)
                     new_params = self.params.copy()
                     for var in var_test:
@@ -1687,7 +1687,7 @@ class ChromatinDynamical:
                     print('Nelder Mead on alpha and gamma..')
                 self.fitting_flag_ = 1
                 res = minimize(self.mse, x0=[self.params[4], self.params[6]],
-                               method='Nelder-Mead', tol=1e-2, 
+                               method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 3})
 
                 if self.verbose >= 2:
@@ -1830,7 +1830,7 @@ class ChromatinDynamical:
                 rescale_u = x[2]
 
             elif len(x) == 4:  # fit all
-                t3 = np.array([self.t_sw_1, x[0], self.t_sw_3 - self.t_sw_1 
+                t3 = np.array([self.t_sw_1, x[0], self.t_sw_3 - self.t_sw_1
                                - x[0]])
                 r4 = np.array([self.alpha_c, x[1], x[2], x[3]])
 
@@ -1846,7 +1846,7 @@ class ChromatinDynamical:
 
         # chromatin-RNA
         else:
-            if len(x) == 2: 
+            if len(x) == 2:
                 if self.fitting_flag_ == 1:  # fit rna switch time and alpha
                     if self.model == 0 or self.model == 1:
                         t3 = np.array([self.t_sw_1, self.params[1], x[0]])
@@ -1858,7 +1858,7 @@ class ChromatinDynamical:
                     t3 = self.params[:3]
                     r4 = np.array([self.alpha_c, x[0], self.beta, x[1]])
 
-            elif len(x) == 3: 
+            elif len(x) == 3:
                 # fit t_sw_1, chromatin switch time, and alpha_c
                 if self.fitting_flag_ == 1:
                     if self.model == 0 or self.model == 1:
@@ -1891,7 +1891,7 @@ class ChromatinDynamical:
                     t3 = x
                     r4 = self.rates
 
-            elif len(x) == 7: 
+            elif len(x) == 7:
                 t3 = x[:3]
                 r4 = x[3:]
 
@@ -1948,24 +1948,24 @@ class ChromatinDynamical:
         s_array = self.s_all if fit_outlier else self.s
 
         # distances and time assignments
-        res = calculate_dist_and_time(c_array, 
-                                      u_array, 
-                                      s_array, 
-                                      t_sw_array, 
-                                      r4[0], 
-                                      r4[1], 
-                                      r4[2], 
-                                      r4[3], 
-                                      rescale_c, 
-                                      rescale_u, 
-                                      scale_cc=scale_cc, 
-                                      scale_factor=self.scale_factor, 
-                                      model=self.model, 
-                                      direction=self.direction, 
-                                      conn=self.conn if fit_outlier 
-                                      else self.conn_sub, 
-                                      k=self.k_dist, 
-                                      t=self.n_anchors, 
+        res = calculate_dist_and_time(c_array,
+                                      u_array,
+                                      s_array,
+                                      t_sw_array,
+                                      r4[0],
+                                      r4[1],
+                                      r4[2],
+                                      r4[3],
+                                      rescale_c,
+                                      rescale_u,
+                                      scale_cc=scale_cc,
+                                      scale_factor=self.scale_factor,
+                                      model=self.model,
+                                      direction=self.direction,
+                                      conn=self.conn if fit_outlier
+                                      else self.conn_sub,
+                                      k=self.k_dist,
+                                      t=self.n_anchors,
                                       rna_only=self.rna_only,
                                       penalize_gap=penalize_gap,
                                       all_cells=fit_outlier)
@@ -2028,15 +2028,15 @@ class ChromatinDynamical:
 
             self.t_sw_1, self.t_sw_2, self.t_sw_3 = t_sw_array
             self.t_sw_array = t_sw_array
-            self.params = np.array([self.t_sw_1, 
-                                    self.t_sw_2-self.t_sw_1, 
-                                    self.t_sw_3-self.t_sw_2, 
-                                    self.alpha_c, 
-                                    self.alpha, 
-                                    self.beta, 
-                                    self.gamma, 
-                                    self.scale_cc, 
-                                    self.rescale_c, 
+            self.params = np.array([self.t_sw_1,
+                                    self.t_sw_2-self.t_sw_1,
+                                    self.t_sw_3-self.t_sw_2,
+                                    self.alpha_c,
+                                    self.alpha,
+                                    self.beta,
+                                    self.gamma,
+                                    self.scale_cc,
+                                    self.rescale_c,
                                     self.rescale_u])
             if not initialize:
                 self.state = state_pred
@@ -2054,14 +2054,14 @@ class ChromatinDynamical:
                 switch = np.sum(self.t_sw_array < 20)
                 typed_tau_list = List()
                 [typed_tau_list.append(x) for x in tau_list]
-                exp_list, exp_sw_list = generate_exp(typed_tau_list, 
-                                                     self.t_sw_array[:switch], 
-                                                     self.alpha_c, 
-                                                     self.alpha, 
-                                                     self.beta, 
-                                                     self.gamma, 
-                                                     scale_cc=self.scale_cc, 
-                                                     model=self.model, 
+                exp_list, exp_sw_list = generate_exp(typed_tau_list,
+                                                     self.t_sw_array[:switch],
+                                                     self.alpha_c,
+                                                     self.alpha,
+                                                     self.beta,
+                                                     self.gamma,
+                                                     scale_cc=self.scale_cc,
+                                                     model=self.model,
                                                      rna_only=self.rna_only)
                 rescale_factor = np.array([self.rescale_c,
                                            self.rescale_u,
@@ -2648,38 +2648,38 @@ def multimodel_helper(c, u, s,
         velocity, likelihood, anchors
 
 
-def recover_dynamics_chrom(adata_rna, 
-                           adata_atac=None, 
-                           gene_list=None, 
-                           max_iter=5, 
-                           init_mode='invert', 
-                           model_to_run=None, 
-                           verbose=False, 
-                           plot=False, 
-                           parallel=True, 
-                           n_jobs=None, 
-                           save_plot=False, 
+def recover_dynamics_chrom(adata_rna,
+                           adata_atac=None,
+                           gene_list=None,
+                           max_iter=5,
+                           init_mode='invert',
+                           model_to_run=None,
+                           verbose=False,
+                           plot=False,
+                           parallel=True,
+                           n_jobs=None,
+                           save_plot=False,
                            plot_dir=None,
-                           rna_only=False, 
-                           fit=True, 
-                           fit_decoupling=True, 
-                           extra_color_key=None, 
-                           embedding='X_umap', 
-                           n_anchors=500, 
-                           k_dist=1, 
-                           thresh_multiplier=1.0, 
-                           weight_c=0.6, 
-                           outlier=99.8, 
-                           n_pcs=30, 
-                           n_neighbors=30, 
-                           fig_size=(8, 6), 
-                           point_size=7, 
-                           partial=None, 
-                           direction=None, 
-                           rescale_u=None, 
-                           alpha=None, 
-                           beta=None, 
-                           gamma=None, 
+                           rna_only=False,
+                           fit=True,
+                           fit_decoupling=True,
+                           extra_color_key=None,
+                           embedding='X_umap',
+                           n_anchors=500,
+                           k_dist=1,
+                           thresh_multiplier=1.0,
+                           weight_c=0.6,
+                           outlier=99.8,
+                           n_pcs=30,
+                           n_neighbors=30,
+                           fig_size=(8, 6),
+                           point_size=7,
+                           partial=None,
+                           direction=None,
+                           rescale_u=None,
+                           alpha=None,
+                           beta=None,
+                           gamma=None,
                            t_sw=None
                            ):
 
@@ -2760,9 +2760,9 @@ def recover_dynamics_chrom(adata_rna,
         Marker point size for plotting.
     extra_color_key: `str` (default: `None`)
         Extra color key used for plotting. Common choices are `leiden`,
-        `celltype`, etc. 
+        `celltype`, etc.
         The colors for each category must be present in one of anndatas, which
-        can be pre-computed 
+        can be pre-computed
         with `scanpy.pl.scatter` function.
     embedding: `str` (default: `X_umap`)
         2D coordinates of the low-dimensional embedding of cells.
