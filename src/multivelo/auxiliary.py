@@ -7,6 +7,15 @@ import scanpy as sc
 import scvelo as scv
 import pandas as pd
 from tqdm.auto import tqdm
+import scipy
+import sys
+import os
+
+current_path = os.path.dirname(__file__)
+pywnn_path = os.path.join(current_path, "pyWNN")
+sys.path.append(pywnn_path)
+
+from pyWNN import *
 
 
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
@@ -299,6 +308,89 @@ def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
         return adata_atac_copy
     else:
         adata_atac.X = tf.dot(idf) * scale_factor
+
+
+def gen_wnn(adata_rna, adata_adt, dims, nn):
+    """Inputs for KNN smoothing.
+
+    This function calculates the nn_idx and nn_dist matrices needed
+    to run knn_smooth_chrom().
+
+    Parameters
+    ----------
+    adata_rna: :class:`~anndata.AnnData`
+        RNA anndata object.
+    adata_atac: :class:`~anndata.AnnData`
+        ATAC anndata object.
+    dims: `List[int]`
+        Dimensions of data for RNA (index=0) and ATAC (index=1)
+    nn: `int` (default: `None`)
+        Top N neighbors to extract for each cell in the connectivities matrix.
+
+    Returns
+    -------
+    nn_idx: `np.darray` (default: `None`)
+        KNN index matrix of size (cells, k).
+    nn_dist: `np.darray` (default: `None`)
+        KNN distance matrix of size (cells, k).
+    """
+
+    # make a copy of the original adata objects so as to keep them unchanged
+    rna_copy = adata_rna.copy()
+    adt_copy = adata_adt.copy()
+
+    sc.tl.pca(rna_copy,
+              n_comps=dims[0],
+              random_state=np.random.RandomState(seed=42),
+              use_highly_variable=True)  # run PCA on RNA
+
+    lsi = scipy.sparse.linalg.svds(adt_copy.X, k=dims[1])  # run SVD on ADT
+
+    # get the lsi result
+    adt_copy.obsm['X_lsi'] = lsi[0]
+
+    # add the PCA from adt to rna
+    rna_copy.obsm['X_rna_pca'] = rna_copy.obsm.pop('X_pca')
+    rna_copy.obsm['X_adt_lsi'] = adt_copy.obsm['X_lsi']
+
+    # run WNN
+    WNNobj = pyWNN(rna_copy,
+                   reps=['X_rna_pca', 'X_adt_lsi'],
+                   npcs=dims,
+                   n_neighbors=nn,
+                   seed=42)
+
+    adata_seurat = WNNobj.compute_wnn(rna_copy)
+
+    # get the matrix storing the distances between each cell and its neighbors
+    cx = scipy.sparse.coo_matrix(adata_seurat.obsp["WNN_distance"])
+
+    # the number of cells
+    cells = adata_seurat.obsp['WNN_distance'].shape[0]
+
+    # define the shape of our final results
+    # and make the arrays that will hold the results
+    new_shape = (cells, nn)
+    nn_dist = np.zeros(shape=new_shape)
+    nn_idx = np.zeros(shape=new_shape)
+
+    # new_col defines what column we store data in
+    # our result arrays
+    new_col = 0
+
+    # loop through the distance matrices
+    for i, j, v in zip(cx.row, cx.col, cx.data):
+
+        # store the distances between neighbor cells
+        nn_dist[i][new_col % nn] = v
+
+        # for each cell's row, store the row numbers of its neighbor cells
+        # (1-indexing instead of 0- is a holdover from R multimodalneighbors())
+        nn_idx[i][new_col % nn] = int(j) + 1
+
+        new_col += 1
+
+    return nn_idx, nn_dist
 
 
 def knn_smooth_chrom(adata_atac, nn_idx=None, nn_dist=None, conn=None,
