@@ -1,11 +1,16 @@
+import os
+import sys
+
+current_path = os.path.dirname(__file__)
+src_path = os.path.join(current_path, "../src/multivelo")
+sys.path.append(src_path)
+
 import pytest
 import numpy as np
 import sys
-import multivelo as mv
+import auxiliary as a
 import scanpy as sc
 import scvelo as scv
-
-sys.path.append("/..")
 
 scv.settings.verbosity = 3
 scv.settings.presenter_view = True
@@ -20,10 +25,10 @@ def result_data_2():
     adata_atac = sc.read("test_files/fig2_for_test.h5ad")
 
     # aggregate peaks
-    adata_atac = mv.aggregate_peaks_10x(adata_atac,
-                                        'test_files/peak_annotation.tsv',
-                                        'test_files/feature_linkage.bedpe',
-                                        verbose=False)
+    adata_atac = a.aggregate_peaks_10x(adata_atac,
+                                       'test_files/peak_annotation.tsv',
+                                       'test_files/feature_linkage.bedpe',
+                                       verbose=False)
 
     return adata_atac
 
@@ -58,7 +63,7 @@ def test_tfidf(result_data_2):
     tfidf_result = result_data_2.copy()
 
     # run tfidf
-    mv.tfidf_norm(tfidf_result)
+    a.tfidf_norm(tfidf_result)
 
     # the data indices we want to check
     indices = [0, 100000, 200000, 300000, 400000]
@@ -94,7 +99,7 @@ def test_smooth(result_data_2):
     atac_smooth = new_result[:nn_idx.shape[0], :]
 
     # run knn_smooth_chrom
-    mv.knn_smooth_chrom(atac_smooth, nn_idx, nn_dist)
+    a.knn_smooth_chrom(atac_smooth, nn_idx, nn_dist)
 
     # the data indices we want to check
     indices = [0, 70000, 140000, 210000, 280000]
