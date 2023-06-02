@@ -1,6 +1,9 @@
+from .pyWNN import *
+
 from .auxiliary import (
     aggregate_peaks_10x,
     tfidf_norm,
+    gen_wnn,
     knn_smooth_chrom,
     calculate_qc_metrics,
     ellipse_fit,

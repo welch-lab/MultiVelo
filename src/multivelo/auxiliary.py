@@ -11,11 +11,7 @@ import scipy
 import sys
 import os
 
-current_path = os.path.dirname(__file__)
-pywnn_path = os.path.join(current_path, "pyWNN")
-sys.path.append(pywnn_path)
-
-from pyWNN import *
+from .pyWNN import *
 
 
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
