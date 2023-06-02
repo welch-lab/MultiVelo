@@ -310,7 +310,7 @@ def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
 
 
 def gen_wnn(adata_rna, adata_adt, dims, nn):
-    """Inputs for KNN smoothing.
+    """Computes inputs for KNN smoothing.
 
     This function calculates the nn_idx and nn_dist matrices needed
     to run knn_smooth_chrom().

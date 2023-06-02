@@ -16,6 +16,7 @@ Preprocessing
 
    aggregate_peaks_10x
    tfidf_norm
+   gen_wnn
    knn_smooth_chrom
    calculate_qc_metrics
 
