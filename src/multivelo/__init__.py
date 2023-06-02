@@ -1,4 +1,4 @@
-from .pyWNN import *
+from .pyWNN import pyWNN
 
 from .auxiliary import (
     aggregate_peaks_10x,

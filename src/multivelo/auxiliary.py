@@ -8,9 +8,14 @@ import scvelo as scv
 import pandas as pd
 from tqdm.auto import tqdm
 import scipy
+import os
+import sys
 
-from .pyWNN import *
+current_path = os.path.dirname(__file__)
 
+sys.path.append(current_path)
+
+from pyWNN import pyWNN
 
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
                         peak_dist=10000, min_corr=0.5, gene_body=False,
@@ -349,10 +354,10 @@ def gen_wnn(adata_rna, adata_adt, dims, nn):
 
     # run WNN
     WNNobj = pyWNN(rna_copy,
-                   reps=['X_rna_pca', 'X_adt_lsi'],
-                   npcs=dims,
-                   n_neighbors=nn,
-                   seed=42)
+                      reps=['X_rna_pca', 'X_adt_lsi'],
+                      npcs=dims,
+                      n_neighbors=nn,
+                      seed=42)
 
     adata_seurat = WNNobj.compute_wnn(rna_copy)
 

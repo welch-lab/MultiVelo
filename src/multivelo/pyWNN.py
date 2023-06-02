@@ -85,7 +85,7 @@ def dist_from_adj(adjacency, embed1, embed2, nndist1, nndist2):
             b = (((embed2[i,:] - embed2[col,:])**2).sum()**.5) - nndist2[i]
             if b == 0: dist2[i,col] = np.nan
             else: dist2[i,col] = b
-            
+
         if (i % 2000) == 0:
             toc = time.perf_counter()
             print('%d out of %d %.2f seconds elapsed' % (i, ncells, toc-tic))
@@ -109,31 +109,31 @@ def select_topK(dist,  n_neighbors=20):
         idx = np.argsort(rowvals)
         final_data.append(rowvals[idx[(-1*n_neighbors):]])
         final_col_ind.append(cols[idx[(-1*n_neighbors):]])
-            
+
     final_data = np.concatenate(final_data)
     final_col_ind = np.concatenate(final_col_ind)
     final_row_ind = np.tile(np.arange(nrows), (n_neighbors, 1)).reshape(-1, order='F')
-                
+
     result = csr_matrix((final_data, (final_row_ind, final_col_ind)), shape=(nrows, dist.shape[1]))
 
     return(result)
 
 
 class pyWNN():
-    
+
     def __init__(self, adata, reps=['X_pca', 'X_apca'], n_neighbors=20, npcs=[20, 20], seed=14, distances=None):
         """\
         Class for running weighted nearest neighbors analysis as described in Hao
         et al 2021.
         """
         print("Orig w/ prints v4")
-        
+
         self.seed = seed
         np.random.seed(seed)
-        
+
         if len(reps)>2:
             sys.exit('WNN currently only implemented for 2 modalities')
-        
+
         self.adata = adata.copy()
         self.reps = [r+'_norm' for r in reps]
         self.npcs = npcs
@@ -146,7 +146,7 @@ class pyWNN():
             sc.pp.neighbors(self.adata, n_neighbors=n_neighbors, n_pcs=npcs[0], use_rep=self.reps[0], metric='euclidean', key_added='1')
             sc.pp.neighbors(self.adata, n_neighbors=n_neighbors, n_pcs=npcs[1], use_rep=self.reps[1], metric='euclidean', key_added='2')
             sc.pp.neighbors(self.adata, n_neighbors=200, n_pcs=npcs[0], use_rep=self.reps[0], metric='euclidean', key_added='1_200')
-            sc.pp.neighbors(self.adata, n_neighbors=200, n_pcs=npcs[1], use_rep=self.reps[1], metric='euclidean', key_added='2_200')        
+            sc.pp.neighbors(self.adata, n_neighbors=200, n_pcs=npcs[1], use_rep=self.reps[1], metric='euclidean', key_added='2_200')
             self.distances = ['1_distances', '2_distances', '1_200_distances', '2_200_distances']
         else:
             self.distances = distances
@@ -157,7 +157,7 @@ class pyWNN():
         for d in self.distances:
             if type(self.adata.obsp[d]) is not csr_matrix:
                 self.adata.obsp[d] = csr_matrix(self.adata.obsp[d])
-            
+
         self.NNdist = []
         self.NNidx = []
         self.NNadjacency = []
@@ -178,7 +178,7 @@ class pyWNN():
 
         self.weights = []
         self.WNN = None
-    
+
     def compute_weights(self):
         cmap = {0:1, 1:0}
         affinity_ratios = []
@@ -194,12 +194,12 @@ class pyWNN():
             cross_affinity = compute_affinity(cross_predict_dist, self.NNdist[i], self.BWs[i])
             affinity_ratios.append(within_affinity / (cross_affinity + 0.0001))
             self.within.append(within_predict_dist)
-            self.cross.append(cross_predict_dist)            
-        
+            self.cross.append(cross_predict_dist)
+
         self.weights.append( 1 / (1+ np.exp(affinity_ratios[1]-affinity_ratios[0])) )
         self.weights.append( 1 - self.weights[0] )
 
-   
+
     def compute_wnn(self, adata):
         print('Computing modality weights')
         self.compute_weights()
@@ -225,7 +225,7 @@ class pyWNN():
         x[x>1]=1
         WNNdist.data = np.sqrt(x)
         self.WNNdist = WNNdist
-        
+
 
         adata.obsp['WNN'] = self.WNN
         adata.obsp['WNN_distance'] = self.WNNdist
