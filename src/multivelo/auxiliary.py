@@ -8,8 +8,6 @@ import scvelo as scv
 import pandas as pd
 from tqdm.auto import tqdm
 import scipy
-import sys
-import os
 
 from .pyWNN import *
 
