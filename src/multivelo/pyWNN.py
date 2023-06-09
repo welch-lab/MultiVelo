@@ -126,7 +126,6 @@ class pyWNN():
         Class for running weighted nearest neighbors analysis as described in Hao
         et al 2021.
         """
-        print("Orig w/ prints v4")
 
         self.seed = seed
         np.random.seed(seed)
@@ -151,9 +150,6 @@ class pyWNN():
         else:
             self.distances = distances
 
-        print("Adata:")
-        print(self.adata)
-
         for d in self.distances:
             if type(self.adata.obsp[d]) is not csr_matrix:
                 self.adata.obsp[d] = csr_matrix(self.adata.obsp[d])
@@ -163,7 +159,6 @@ class pyWNN():
         self.NNadjacency = []
         self.BWs = []
 
-        print("Enumerating!")
         for (i,r) in enumerate(self.reps):
             nn = get_nearestneighbor(self.adata.obsp[self.distances[i]])
             dist_to_nn = ((self.adata.obsm[r]-self.adata.obsm[r][nn, :])**2).sum(axis=1)**.5

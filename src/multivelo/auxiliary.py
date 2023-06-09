@@ -309,7 +309,7 @@ def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
         adata_atac.X = tf.dot(idf) * scale_factor
 
 
-def gen_wnn(adata_rna, adata_adt, dims, nn):
+def gen_wnn(adata_rna, adata_adt, dims, nn, random_state=0):
     """Computes inputs for KNN smoothing.
 
     This function calculates the nn_idx and nn_dist matrices needed
@@ -474,16 +474,15 @@ def calculate_qc_metrics(adata, **kwargs):
     cell_cycle_score: `.var`
         cell cycle score difference between G2M_score and S_score.
     """
-    print("Running from here!")
     sc.pp.calculate_qc_metrics(adata, **kwargs)
     if 'spliced' not in adata.layers:
         raise ValueError('Spliced matrix not found in adata.layers')
     if 'unspliced' not in adata.layers:
         raise ValueError('Unspliced matrix not found in adata.layers')
-    print(adata.layers['spliced'].shape)
+    # print(adata.layers['spliced'].shape)
     total_s = np.nansum(adata.layers['spliced'].toarray(), axis=1)
     total_u = np.nansum(adata.layers['unspliced'].toarray(), axis=1)
-    print(total_u.shape)
+    # print(total_u.shape)
     adata.obs['total_unspliced'] = total_u
     adata.obs['total_spliced'] = total_s
     adata.obs['unspliced_ratio'] = total_u / (total_s + total_u)
