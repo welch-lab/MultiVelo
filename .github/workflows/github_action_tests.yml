@@ -25,14 +25,21 @@ jobs:
             python: "3.9"
           - os: windows-latest
             python: "3.10"
+          - os: macos-11
+            python: "3.9"
+          - os: macos-11
+            python: "3.10"
 
     env:
       OS: ${{ matrix.os }}
-      PYTHON: ${{ matrix.python }}
+      PYTHON: ${{ matrix.python_version }}
 
     steps:
       # Check
       - uses: actions/checkout@v2
+      - uses: actions/setup-python@v4
+      - with:
+          python-version: "${{ matrix.python_version }}"
       - name: Install requirements
         run: |
           pip3 install -r requirements.txt
