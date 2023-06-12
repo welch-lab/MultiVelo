@@ -17,29 +17,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            python: "3.9"
-          - os: ubuntu-latest
-            python: "3.10"
-          - os: windows-latest
-            python: "3.9"
-          - os: windows-latest
-            python: "3.10"
-          - os: macos-11
-            python: "3.9"
-          - os: macos-11
-            python: "3.10"
+          - os: ["windows-latest", "ubuntu-latest", "macos-11"]
+            python: ["3.9", "3.10"]
 
     env:
       OS: ${{ matrix.os }}
-      PYTHON: ${{ matrix.python_version }}
 
     steps:
       # Check
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v4
         with:
-          python-version: "${{ matrix.python_version }}"
+          python-version: "${{ matrix.python }}"
       - name: Install requirements
         run: |
           pip3 install -r requirements.txt
