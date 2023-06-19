@@ -11,15 +11,19 @@ import scipy
 import os
 import sys
 
+from multivelo import logging as logg
+from multivelo import settings
+
 current_path = os.path.dirname(__file__)
 
 sys.path.append(current_path)
 
 from pyWNN import pyWNN
 
+
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
                         peak_dist=10000, min_corr=0.5, gene_body=False,
-                        return_dict=False, verbose=False):
+                        return_dict=False):
 
     """Peak to gene aggregation.
 
@@ -43,8 +47,6 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
         Whether to add gene body peaks to the associated promoters.
     return_dict: `bool` (default: `False`)
         Whether to return promoter and enhancer dictionaries.
-    verbose: `bool` (default: `False`)
-        Whether to print number of genes with promoter peaks.
 
     Returns
     -------
@@ -70,8 +72,10 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
             raise ValueError('Peak annotation file should contain 4 columns '
                              '(CellRanger ARC 1.0.0) or 5 columns (CellRanger '
                              'ARC 2.0.0)')
-        if verbose:
-            print(f'CellRanger ARC identified as {cellranger_version}.0.0')
+       
+        logg.update(f'CellRanger ARC identified as {cellranger_version}.0.0',
+                    v=1)
+
         if cellranger_version == 1:
             for line in f:
                 tmp = line.rstrip().split('\t')
@@ -240,8 +244,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
     gene_dict = promoter_dict
     enhancer_dict = {}
     promoter_genes = list(promoter_dict.keys())
-    if verbose:
-        print(f'Found {len(promoter_genes)} genes with promoter peaks')
+    logg.update(f'Found {len(promoter_genes)} genes with promoter peaks', 1)
     for gene in promoter_genes:
         if gene_body:  # add gene-body peaks
             if gene in gene_body_dict:
@@ -479,10 +482,14 @@ def calculate_qc_metrics(adata, **kwargs):
         raise ValueError('Spliced matrix not found in adata.layers')
     if 'unspliced' not in adata.layers:
         raise ValueError('Unspliced matrix not found in adata.layers')
-    # print(adata.layers['spliced'].shape)
+
+    logg.update(adata.layers['spliced'].shape, v=1)
+
     total_s = np.nansum(adata.layers['spliced'].toarray(), axis=1)
     total_u = np.nansum(adata.layers['unspliced'].toarray(), axis=1)
-    # print(total_u.shape)
+
+    logg.update(total_u.shape, v=1)
+
     adata.obs['total_unspliced'] = total_u
     adata.obs['total_spliced'] = total_s
     adata.obs['unspliced_ratio'] = total_u / (total_s + total_u)
@@ -681,7 +688,6 @@ def ellipse_fit(adata,
 
 
 def compute_quantile_scores(adata,
-                            verbose=True,
                             n_pcs=30,
                             n_neighbors=30
                             ):
@@ -703,8 +709,6 @@ def compute_quantile_scores(adata,
     ----------
     adata: :class:`~anndata.AnnData`
         RNA anndata object. Required fields: `Mu` and `Ms`.
-    verbose: `bool` (default: `True`)
-        Print the number of good ellipse fit based on some criteria.
     n_pcs: `int` (default: 30)
         Number of principal components to compute connectivities.
     n_neighbors: `int` (default: 30)
@@ -800,10 +804,11 @@ def compute_quantile_scores(adata,
     adata.layers['quantile_scores_2nd_bit'] = quantile_scores_2bit[:, :, 1]
     quantile_gene[quality_gene_idx] = True
 
-    if verbose:
+    if settings.VERBOSITY >= 1:
         perc_good = np.sum(quantile_gene) / adata.n_vars * 100
-        print(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}%'
-              'genes have good ellipse fits')
+
+    logg.update(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}%'
+                'genes have good ellipse fits', v=1)
 
     adata.obs['quantile_score_sum'] = \
         np.sum(adata[:, quantile_gene].layers['quantile_scores'], axis=1)

@@ -8,12 +8,14 @@ import pandas as pd
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 
+from multivelo import logging as logg
+from multivelo import settings
+
 
 class ChromatinVelocity:
     def __init__(self, c, u, s,
                  ss, us,
                  gene=None,
-                 verbose=False,
                  save_plot=False,
                  plot_dir=None,
                  fit_args=None,
@@ -23,7 +25,6 @@ class ChromatinVelocity:
                  ):
 
         self.gene = gene
-        self.verbose = verbose
 
         # fitting arguments
         self.rna_only = rna_only
@@ -86,9 +87,9 @@ class ChromatinVelocity:
         self.us = (None if us is None
                    else self.us_all[self.non_zero & self.non_outlier])
         self.low_quality = len(self.u) < 10
-        if self.verbose >= 2:
-            print(f'{len(self.u)} cells passed filter and will be used to fit'
-                  ' regressions.')
+
+        logg.update(f'{len(self.u)} cells passed filter and will be used to '
+                    'fit regressions.', v=2)
 
         # 4 rate parameters
         self.alpha_c = 0.1
@@ -194,7 +195,7 @@ class ChromatinVelocity:
         return self.loss
 
 
-def regress_func(c, u, s, ss, us, m, v, sp, pdir, fa, gene, ro, extra):
+def regress_func(c, u, s, ss, us, m, sp, pdir, fa, gene, ro, extra):
 
     c_90 = np.percentile(c, 90)
     u_90 = np.percentile(u, 90)
@@ -202,8 +203,7 @@ def regress_func(c, u, s, ss, us, m, v, sp, pdir, fa, gene, ro, extra):
     low_quality = ((u_90 == 0 or s_90 == 0) if ro
                    else (c_90 == 0 or u_90 == 0 or s_90 == 0))
     if low_quality:
-        if v >= 1:
-            print(f'low quality gene {gene}, skipping')
+        logg.update(f'low quality gene {gene}, skipping', v=1)
         return np.zeros(len(u)), np.zeros(len(u)), 0, np.inf
 
     cvc = ChromatinVelocity(c,
@@ -211,7 +211,6 @@ def regress_func(c, u, s, ss, us, m, v, sp, pdir, fa, gene, ro, extra):
                             s,
                             ss,
                             us,
-                            verbose=v,
                             save_plot=sp,
                             plot_dir=pdir,
                             fit_args=fa,
@@ -237,7 +236,6 @@ def velocity_chrom(adata_rna,
                    adata_atac=None,
                    gene_list=None,
                    mode='stochastic',
-                   verbose=False,
                    parallel=True,
                    n_jobs=None,
                    save_plot=False,
@@ -270,9 +268,6 @@ def velocity_chrom(adata_rna,
         `'stochastic'`: computing steady-state ratio with the first and second
         moments.
         `'deterministic'`: computing steady-state ratio with the first moments.
-    verbose: `int` or `bool` (default: `False`)
-        Level of fitting detail to output. Possible values: `False`, 0, 1, 2,
-        or any number above 2.
     parallel: `bool` (default: `True`)
         Whether to fit genes in a parallel fashion (recommended).
     n_jobs: `int` (default: available threads)
@@ -333,8 +328,8 @@ def velocity_chrom(adata_rna,
     fit_args['fig_size'] = list(fig_size)
     fit_args['point_size'] = point_size
     if mode == 'dynamical':
-        print('You do not need to run mv.velocity for chromatin dynamical '
-              'model')
+        logg.update('You do not need to run mv.velocity for chromatin '
+                    'dynamical model', v=0)
         return
     elif mode == 'stochastic' or mode == 'deterministic':
         fit_args['mode'] = mode
@@ -419,10 +414,8 @@ def velocity_chrom(adata_rna,
     gn = len(gene_list)
     if gn == 0:
         raise ValueError('None of the genes specified are in the adata object')
-    if verbose is True:
-        verbose = 1
-    if verbose >= 1:
-        print(f'{gn} genes will be fitted')
+    
+    logg.update(f'{gn} genes will be fitted', v=1)
 
     velo_s = np.zeros((adata_rna.n_obs, gn))
     variance_velo_s = np.zeros((adata_rna.n_obs, gn))
@@ -445,8 +438,8 @@ def velocity_chrom(adata_rna,
         if n_jobs > gn:
             n_jobs = gn
         batches = -(-gn // n_jobs)
-        if n_jobs > 1 and verbose >= 1:
-            print(f'running {n_jobs} jobs in parallel')
+        if n_jobs > 1:
+            logg.update(f'running {n_jobs} jobs in parallel', v=1)
     else:
         n_jobs = 1
         batches = gn
@@ -457,8 +450,7 @@ def velocity_chrom(adata_rna,
     for group in range(batches):
         gene_indices = range(group * n_jobs, np.min([gn, (group+1) * n_jobs]))
         if parallel:
-            verb = 5 if verbose >= 2 else 0
-            verbose = False
+            verb = 51 if settings.VERBOSITY >= 2 else 0
 
             res = Parallel(n_jobs=n_jobs, backend='loky', verbose=verb)(
                 delayed(regress_func)(
@@ -468,7 +460,6 @@ def velocity_chrom(adata_rna,
                     None if mode == 'deterministic' else Mss[:, i],
                     None if mode == 'deterministic' else Mus[:, i],
                     mode,
-                    verbose,
                     save_plot,
                     plot_dir,
                     fit_args,
@@ -489,8 +480,7 @@ def velocity_chrom(adata_rna,
         else:
             i = group
             gene = gene_list[i]
-            if verbose >= 1:
-                print(f'@@@@@fitting {gene}')
+            logg.update(f'@@@@@fitting {gene}', v=1)
             velocity, variance_velocity, r2, loss = \
                 regress_func(c_mat[:, i],
                              u_mat[:, i],
@@ -499,7 +489,6 @@ def velocity_chrom(adata_rna,
                              if mode == 'deterministic' else Mss[:, i],
                              None if mode == 'deterministic' else Mus[:, i],
                              mode,
-                             verbose,
                              save_plot,
                              plot_dir,
                              fit_args,
