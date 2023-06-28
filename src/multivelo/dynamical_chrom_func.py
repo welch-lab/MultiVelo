@@ -2495,7 +2495,13 @@ class ChromatinDynamical:
 
 
 def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, pl, sp, pdir, fa,
-                 gene, pa, di, ro, fit, fd, extra, ru, alpha, beta, gamma, t_):
+                 gene, pa, di, ro, fit, fd, extra, ru, alpha, beta, gamma, t_,
+                 verbosity, log_folder, log_filename):
+
+    settings.VERBOSITY = verbosity
+    settings.LOG_FOLDER = log_folder
+    settings.LOG_FILENAME = log_filename
+    settings.GENE = gene
 
     if m is not None:
         logg.update('#########################################################'
@@ -2592,8 +2598,8 @@ def multimodel_helper(c, u, s,
                       alpha,
                       beta,
                       gamma,
-                      t_
-                      ):
+                      t_,
+                      verbosity, log_folder, log_filename):
 
     loss, param_cand, initial_cand, time_cand = [], [], [], []
     state_cand, velo_cand, likelihood_cand, anch_cand = [], [], [], []
@@ -3115,7 +3121,10 @@ def recover_dynamics_chrom(adata_rna,
                     else beta,
                     gamma[i] if isinstance(gamma, (list, np.ndarray))
                     else gamma,
-                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw)
+                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw,
+                    settings.VERBOSITY,
+                    settings.LOG_FOLDER,
+                    settings.LOG_FILENAME)
                 for i in gene_indices)
 
             for i, r in zip(gene_indices, res):

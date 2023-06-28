@@ -11,6 +11,9 @@ def _msg(msg, code):
     if code == 2 or code == 3:
         msg = msg_codes[code] + ": " + msg
 
+    if settings.GENE is not None:
+        msg = str(settings.GENE) + " - " + msg
+
     msg = str(msg) + "\n"
 
     return msg
@@ -40,7 +43,7 @@ def _log(msg, code, v=0):
         with open(log_path, "a") as logfile:
             logfile.write(msg)
 
-            # logfile.close()
+            logfile.close()
 
 
 def update(msg, v):
