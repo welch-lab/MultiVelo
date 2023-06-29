@@ -1438,8 +1438,10 @@ class ChromatinDynamical:
                                     + self.params[2]])
         self.t_sw_1, self.t_sw_2, self.t_sw_3 = self.t_sw_array
 
-        logg.update(f'initial params: {self.t_sw_array} {self.rates} '
-                    f'{self.rescale_c} {self.rescale_u}', v=1)
+        logg.update(f'initial params:\nswitch time array = {self.t_sw_array},\n'
+                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
+                    f'c rescale factor = {self.rescale_c},\n'
+                    f'u rescale factor = {self.rescale_u}', v=1)
         logg.update(f'initial loss: {self.loss[-1]}', v=1)
 
     def fit(self):
@@ -1637,8 +1639,10 @@ class ChromatinDynamical:
 
         self.realign_time_and_velocity(c, u, s, anchor_time)
 
-        logg.update(f'final params: {self.t_sw_array} {self.rates} '
-                    f'{self.scale_cc} {self.rescale_c} {self.rescale_u}',
+        logg.update(f'final params:\nswitch time array = {self.t_sw_array},\n'
+                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
+                    f'c rescale factor = {self.rescale_c},\n'
+                    f'u rescale factor = {self.rescale_u}',
                     v=1)
         logg.update(f'final loss: {self.loss[-1]}', v=1)
         logg.update(f'final likelihood: {self.likelihood}', v=1)
@@ -2431,8 +2435,10 @@ class ChromatinDynamical:
         self.u0 = u[self.anchor_min_idx]
         self.s0 = s[self.anchor_min_idx]
         self.realign_ratio = 20 / (np.max(self.t) - np.min(self.t))
-        logg.update(f'fitted params: {self.t_sw_array} {self.rates} '
-                    f'{self.scale_cc} {self.rescale_c} {self.rescale_u}',
+        logg.update(f'fitted params:\nswitch time array = {self.t_sw_array},\n'
+                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
+                    f'c rescale factor = {self.rescale_c},\n'
+                    f'u rescale factor = {self.rescale_u}',
                     v=1)
         logg.update(f'aligning to range (0,20) by {self.realign_ratio}..',
                     v=1)
