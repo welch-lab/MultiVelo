@@ -8,7 +8,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 
-from multivelo import logging as logg
+from multivelo import mv_logging as logg
 from multivelo import settings
 
 

@@ -11,7 +11,7 @@ import scipy
 import os
 import sys
 
-from multivelo import logging as logg
+from multivelo import mv_logging as logg
 from multivelo import settings
 
 current_path = os.path.dirname(__file__)

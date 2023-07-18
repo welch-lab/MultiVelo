@@ -1,11 +1,13 @@
 from multivelo import settings
 import os
+from numba import jit
 
 msg_codes = {1: "update", 2: "warning", 3: "error"}
 
 
 # msg = the message to print
 # code = what message code this runs under
+# @jit(nopython=True, fastmath=True, debug=True)
 def _msg(msg, code):
 
     if code == 2 or code == 3:
@@ -16,12 +18,16 @@ def _msg(msg, code):
 
     msg = str(msg) + "\n"
 
+    if code == 2:
+        raise Exception(msg)
+
     return msg
 
 
 # msg: the message to output
 # v: at what minimum verbosity level do we output this?
 # filename: the filename to output the log to
+# @jit(nopython=True, fastmath=True, debug=True)
 def _log(msg, code, v=0):
 
     # if the current verbosity is less than the minimum
@@ -45,14 +51,14 @@ def _log(msg, code, v=0):
 
             logfile.close()
 
-
+# @jit(nopython=True, fastmath=True, debug=True)
 def update(msg, v):
     _log(msg, code=1, v=v)
 
-
+# @jit(nopython=True, fastmath=True, debug=True)
 def warn(msg, v):
     _log(msg, code=2, v=v)
 
-
+# @jit(nopython=True, fastmath=True, debug=True)
 def error(msg, v):
     _log(msg, code=3, v=v)

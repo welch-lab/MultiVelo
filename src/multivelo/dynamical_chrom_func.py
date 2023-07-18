@@ -16,12 +16,134 @@ from numba import jit
 from numba.typed import List
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
+import math
 
-from multivelo import logging as logg
+from multivelo import mv_logging as logg
 from multivelo import settings
 
+# @jit(nopython=True, fastmath=True)
+# def check_params(alpha_c,
+#                  alpha,
+#                  beta,
+#                  gamma,
+#                  c0=None,
+#                  u0=None,
+#                  s0=None):
+    
+#     # check if any of our parameters are infinite
+#     if c0 is not None and math.isinf(c0):
+#         logg.error("c0 is infinite.", v=1)
+#     if u0 is not None and math.isinf(u0):
+#         logg.error("u0 is infinite.", v=1)
+#     if s0 is not None and math.isinf(s0):
+#         logg.error("s0 is infinite.", v=1)
+#     if math.isinf(alpha_c):
+#         logg.error("alpha_c is infinite.", v=1)
+#     if math.isinf(alpha):
+#         logg.error("alpha is infinite.", v=1)
+#     if math.isinf(beta):
+#         logg.error("beta is infinite.", v=1)
+#     if math.isinf(gamma):
+#         logg.error("gamma is infinite.", v=1)
 
-@jit(nopython=True, fastmath=True)
+#     # check if any of our parameters are nan
+#     if c0 is not None and math.isnan(c0):
+#         logg.error("c0 is infinite.", v=1)
+#     if u0 is not None and math.isnan(u0):
+#         logg.error("u0 is infinite.", v=1)
+#     if s0 is not None and math.isnan(s0):
+#         logg.error("s0 is infinite.", v=1)
+#     if math.isnan(alpha_c):
+#         logg.error("alpha_c is infinite.", v=1)
+#     if math.isnan(alpha):
+#         logg.error("alpha is infinite.", v=1)
+#     if math.isnan(beta):
+#         logg.error("beta is infinite.", v=1)
+#     if math.isnan(gamma):
+#         logg.error("gamma is infinite.", v=1)
+
+#     # check if any of our rate parameters are 0
+#     if alpha_c < 1e-7:
+#         logg.error("alpha_c is zero.", v=1)
+#     if alpha < 1e-7:
+#         logg.error("alpha is zero.", v=1)
+#     if beta < 1e-7:
+#         logg.error("beta is zero.", v=1)
+#     if gamma < 1e-7:
+#         logg.error("gamma is zero.", v=1)
+
+#     if beta == alpha_c:
+#         logg.error("alpha_c and beta are equal, leading to divide by zero",
+#                     v=1)
+#     if beta == gamma:
+#         logg.error("gamma and beta are equal, leading to divide by zero",
+#                     v=1)
+#     if alpha_c == gamma:
+#         logg.error("gamma and alpha_c are equal, leading to divide by zero",
+#                     v=1)
+
+# @jit(nopython=True, fastmath=True, debug=True)
+# def check_params(alpha_c,
+#                  alpha,
+#                  beta,
+#                  gamma,
+#                  c0=None,
+#                  u0=None,
+#                  s0=None):
+    
+#     # check if any of our parameters are infinite
+#     if c0 is not None and math.isinf(c0):
+#         logg.error("c0 is infinite.", v=1)
+#     if u0 is not None and math.isinf(u0):
+#         logg.error("u0 is infinite.", v=1)
+#     if s0 is not None and math.isinf(s0):
+#         logg.error("s0 is infinite.", v=1)
+#     if math.isinf(alpha_c):
+#         logg.error("alpha_c is infinite.", v=1)
+#     if math.isinf(alpha):
+#         logg.error("alpha is infinite.", v=1)
+#     if math.isinf(beta):
+#         logg.error("beta is infinite.", v=1)
+#     if math.isinf(gamma):
+#         logg.error("gamma is infinite.", v=1)
+
+#     # check if any of our parameters are nan
+#     if c0 is not None and math.isnan(c0):
+#         logg.error("c0 is infinite.", v=1)
+#     if u0 is not None and math.isnan(u0):
+#         logg.error("u0 is infinite.", v=1)
+#     if s0 is not None and math.isnan(s0):
+#         logg.error("s0 is infinite.", v=1)
+#     if math.isnan(alpha_c):
+#         logg.error("alpha_c is infinite.", v=1)
+#     if math.isnan(alpha):
+#         logg.error("alpha is infinite.", v=1)
+#     if math.isnan(beta):
+#         logg.error("beta is infinite.", v=1)
+#     if math.isnan(gamma):
+#         logg.error("gamma is infinite.", v=1)
+
+#     # check if any of our rate parameters are 0
+#     if alpha_c < 1e-7:
+#         logg.error("alpha_c is zero.", v=1)
+#     if alpha < 1e-7:
+#         logg.error("alpha is zero.", v=1)
+#     if beta < 1e-7:
+#         logg.error("beta is zero.", v=1)
+#     if gamma < 1e-7:
+#         logg.error("gamma is zero.", v=1)
+
+#     if beta == alpha_c:
+#         logg.error("alpha_c and beta are equal, leading to divide by zero",
+#                     v=1)
+#     if beta == gamma:
+#         logg.error("gamma and beta are equal, leading to divide by zero",
+#                     v=1)
+#     if alpha_c == gamma:
+#         logg.error("gamma and alpha_c are equal, leading to divide by zero",
+#                     v=1)
+
+@jit(nopython=True, fastmath=True, debug=True)
 def predict_exp(tau,
                 c0,
                 u0,
@@ -35,6 +157,14 @@ def predict_exp(tau,
                 chrom_open=True,
                 backward=False,
                 rna_only=False):
+
+    # check_params(alpha_c,
+    #              alpha,
+    #              beta,
+    #              gamma,
+    #              c0,
+    #              u0,
+    #              s0)
 
     if len(tau) == 0:
         return np.empty((0, 3))
@@ -53,23 +183,43 @@ def predict_exp(tau,
         else:
             kc = 0
             alpha_c *= scale_cc
-    const = (kc - c0) * alpha / (beta - alpha_c)
-    res[:, 0] = kc - (kc - c0) * eat
-    if pred_r:
-        res[:, 1] = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
-        res[:, 1] += const * (ebt - eat)
 
-        res[:, 2] = s0 * egt + (alpha * kc / gamma) * (1 - egt)
-        res[:, 2] += ((beta / (gamma - beta)) *
-                      ((alpha * kc / beta) - u0 - const) * (egt - ebt))
-        res[:, 2] += (beta / (gamma - alpha_c)) * const * (egt - eat)
+    try:
+        const = (kc - c0) * alpha / (beta - alpha_c)
+    except:
+        print("Calculation for const in u(t) and s(t) failed.")
+        print("gene:", settings.GENE)
+        print("c0 =", c0)
+        print("alpha =", alpha)
+        print("beta - alpha_c =", beta-alpha_c)
+
+    res[:, 0] = kc - (kc - c0) * eat
+
+    if pred_r:
+
+        try:
+            res[:, 1] = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
+            res[:, 1] += const * (ebt - eat)
+        except:
+            print("u calculation failed.")
+            print("gene:", settings.GENE)
+            print()
+
+        try: 
+            res[:, 2] = s0 * egt + (alpha * kc / gamma) * (1 - egt)
+            res[:, 2] += ((beta / (gamma - beta)) *
+                        ((alpha * kc / beta) - u0 - const) * (egt - ebt))
+            res[:, 2] += (beta / (gamma - alpha_c)) * const * (egt - eat)
+        except:
+            print("s calculation failed.")
+            print("gene:", settings.GENE)
     else:
         res[:, 1] = np.zeros(len(tau))
         res[:, 2] = np.zeros(len(tau))
     return res
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def generate_exp(tau_list,
                  t_sw_array,
                  alpha_c,
@@ -248,7 +398,7 @@ def generate_exp(tau_list,
     return (exp1, exp2, exp3, exp4), (exp_sw1, exp_sw2, exp_sw3)
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
                           scale_cc=1, model=1):
     if beta == alpha_c:
@@ -354,7 +504,7 @@ def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
     return (exp1, exp2, exp3), (exp_sw1, exp_sw2)
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def ss_exp(alpha_c, alpha, beta, gamma, pred_r=True, chrom_open=True):
     res = np.empty((1, 3))
     if not chrom_open:
@@ -372,7 +522,7 @@ def ss_exp(alpha_c, alpha, beta, gamma, pred_r=True, chrom_open=True):
     return res
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def compute_ss_exp(alpha_c, alpha, beta, gamma, model=0):
     if model == 0:
         ss1 = ss_exp(alpha_c, alpha, beta, gamma, pred_r=False)
@@ -393,7 +543,7 @@ def compute_ss_exp(alpha_c, alpha, beta, gamma, model=0):
     return np.vstack((ss1, ss2, ss3, ss4))
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
                        pred_r=True, chrom_open=True, rna_only=False):
     if rna_only:
@@ -413,7 +563,7 @@ def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
             return alpha_c - alpha_c * c, np.zeros(len(u)), np.zeros(len(u))
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def compute_velocity(t,
                      t_sw_array,
                      state,
@@ -447,6 +597,7 @@ def compute_velocity(t,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
+    #check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -587,7 +738,7 @@ def anchor_points(t_sw_array, total_h=20, t=1000, mode='uniform',
         return tau_list
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def pairwise_distance_square(X, Y):
     res = np.empty((X.shape[0], Y.shape[0]), dtype=X.dtype)
     for a in range(X.shape[0]):
@@ -622,6 +773,7 @@ def calculate_dist_and_time(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
+    #check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -819,6 +971,7 @@ def compute_likelihood(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
+    #check_params(alpha_c, alpha, beta, gamma)
     exp_list, _ = generate_exp(typed_tau_list,
                                t_sw_array[:switch],
                                alpha_c,
@@ -1528,6 +1681,8 @@ class ChromatinDynamical:
         else:
             self.likelihood, self.l_c, self.ssd_c, self.var_c, l_u = \
                 0, 0, 0, 0, 0
+            # TODO: Keep? Remove??
+            l_s = 0
 
         if not self.rna_only:
             logg.update(f'likelihood of c: {self.l_c}, likelihood of u: {l_u}, '
@@ -1572,6 +1727,8 @@ class ChromatinDynamical:
         switch = np.sum(self.t_sw_array < 20)
         typed_tau_list = List()
         [typed_tau_list.append(x) for x in tau_list]
+        #check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
+                     #c0=self.c0, u0=self.u0, s0=self.s0)
         exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                              self.t_sw_array[:switch],
                                              self.alpha_c,
@@ -2041,6 +2198,8 @@ class ChromatinDynamical:
                 switch = np.sum(self.t_sw_array < 20)
                 typed_tau_list = List()
                 [typed_tau_list.append(x) for x in tau_list]
+                #check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
+                             #c0=self.c0, u0=self.u0, s0=self.s0)
                 exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                                      self.t_sw_array[:switch],
                                                      self.alpha_c,
@@ -3200,7 +3359,10 @@ def recover_dynamics_chrom(adata_rna,
                              gamma[i] if isinstance(gamma, (list, np.ndarray))
                              else gamma,
                              t_sw[i] if isinstance(t_sw, (list, np.ndarray))
-                             else t_sw)
+                             else t_sw,
+                             settings.VERBOSITY,
+                             settings.LOG_FOLDER,
+                            settings.LOG_FILENAME)
             switch, rate, scale_cc, rescale_c, rescale_u, realign_ratio = \
                 parameters
             likelihood, l_c, ssd_c, var_c = likelihood
