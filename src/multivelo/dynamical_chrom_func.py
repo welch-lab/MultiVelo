@@ -22,65 +22,65 @@ from multivelo import mv_logging as logg
 from multivelo import settings
 
 # @jit(nopython=True, fastmath=True)
-# def check_params(alpha_c,
-#                  alpha,
-#                  beta,
-#                  gamma,
-#                  c0=None,
-#                  u0=None,
-#                  s0=None):
-    
-#     # check if any of our parameters are infinite
-#     if c0 is not None and math.isinf(c0):
-#         logg.error("c0 is infinite.", v=1)
-#     if u0 is not None and math.isinf(u0):
-#         logg.error("u0 is infinite.", v=1)
-#     if s0 is not None and math.isinf(s0):
-#         logg.error("s0 is infinite.", v=1)
-#     if math.isinf(alpha_c):
-#         logg.error("alpha_c is infinite.", v=1)
-#     if math.isinf(alpha):
-#         logg.error("alpha is infinite.", v=1)
-#     if math.isinf(beta):
-#         logg.error("beta is infinite.", v=1)
-#     if math.isinf(gamma):
-#         logg.error("gamma is infinite.", v=1)
+def check_params(alpha_c,
+                 alpha,
+                 beta,
+                 gamma,
+                 c0=None,
+                 u0=None,
+                 s0=None):
 
-#     # check if any of our parameters are nan
-#     if c0 is not None and math.isnan(c0):
-#         logg.error("c0 is infinite.", v=1)
-#     if u0 is not None and math.isnan(u0):
-#         logg.error("u0 is infinite.", v=1)
-#     if s0 is not None and math.isnan(s0):
-#         logg.error("s0 is infinite.", v=1)
-#     if math.isnan(alpha_c):
-#         logg.error("alpha_c is infinite.", v=1)
-#     if math.isnan(alpha):
-#         logg.error("alpha is infinite.", v=1)
-#     if math.isnan(beta):
-#         logg.error("beta is infinite.", v=1)
-#     if math.isnan(gamma):
-#         logg.error("gamma is infinite.", v=1)
+    # check if any of our parameters are infinite
+    if c0 is not None and math.isinf(c0):
+        logg.error("c0 is infinite.", v=1)
+    if u0 is not None and math.isinf(u0):
+        logg.error("u0 is infinite.", v=1)
+    if s0 is not None and math.isinf(s0):
+        logg.error("s0 is infinite.", v=1)
+    if math.isinf(alpha_c):
+        logg.error("alpha_c is infinite.", v=1)
+    if math.isinf(alpha):
+        logg.error("alpha is infinite.", v=1)
+    if math.isinf(beta):
+        logg.error("beta is infinite.", v=1)
+    if math.isinf(gamma):
+        logg.error("gamma is infinite.", v=1)
 
-#     # check if any of our rate parameters are 0
-#     if alpha_c < 1e-7:
-#         logg.error("alpha_c is zero.", v=1)
-#     if alpha < 1e-7:
-#         logg.error("alpha is zero.", v=1)
-#     if beta < 1e-7:
-#         logg.error("beta is zero.", v=1)
-#     if gamma < 1e-7:
-#         logg.error("gamma is zero.", v=1)
+    # check if any of our parameters are nan
+    if c0 is not None and math.isnan(c0):
+        logg.error("c0 is infinite.", v=1)
+    if u0 is not None and math.isnan(u0):
+        logg.error("u0 is infinite.", v=1)
+    if s0 is not None and math.isnan(s0):
+        logg.error("s0 is infinite.", v=1)
+    if math.isnan(alpha_c):
+        logg.error("alpha_c is infinite.", v=1)
+    if math.isnan(alpha):
+        logg.error("alpha is infinite.", v=1)
+    if math.isnan(beta):
+        logg.error("beta is infinite.", v=1)
+    if math.isnan(gamma):
+        logg.error("gamma is infinite.", v=1)
 
-#     if beta == alpha_c:
-#         logg.error("alpha_c and beta are equal, leading to divide by zero",
-#                     v=1)
-#     if beta == gamma:
-#         logg.error("gamma and beta are equal, leading to divide by zero",
-#                     v=1)
-#     if alpha_c == gamma:
-#         logg.error("gamma and alpha_c are equal, leading to divide by zero",
-#                     v=1)
+    # check if any of our rate parameters are 0
+    if alpha_c < 1e-7:
+        logg.error("alpha_c is zero.", v=1)
+    if alpha < 1e-7:
+        logg.error("alpha is zero.", v=1)
+    if beta < 1e-7:
+        logg.error("beta is zero.", v=1)
+    if gamma < 1e-7:
+        logg.error("gamma is zero.", v=1)
+
+    if beta == alpha_c:
+        logg.error("alpha_c and beta are equal, leading to divide by zero",
+                    v=1)
+    if beta == gamma:
+        logg.error("gamma and beta are equal, leading to divide by zero",
+                    v=1)
+    if alpha_c == gamma:
+        logg.error("gamma and alpha_c are equal, leading to divide by zero",
+                    v=1)
 
 # @jit(nopython=True, fastmath=True, debug=True)
 # def check_params(alpha_c,
@@ -184,35 +184,20 @@ def predict_exp(tau,
             kc = 0
             alpha_c *= scale_cc
 
-    try:
-        const = (kc - c0) * alpha / (beta - alpha_c)
-    except:
-        print("Calculation for const in u(t) and s(t) failed.")
-        print("gene:", settings.GENE)
-        print("c0 =", c0)
-        print("alpha =", alpha)
-        print("beta - alpha_c =", beta-alpha_c)
+    const = (kc - c0) * alpha / (beta - alpha_c)
 
     res[:, 0] = kc - (kc - c0) * eat
 
     if pred_r:
 
-        try:
-            res[:, 1] = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
-            res[:, 1] += const * (ebt - eat)
-        except:
-            print("u calculation failed.")
-            print("gene:", settings.GENE)
-            print()
+        res[:, 1] = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
+        res[:, 1] += const * (ebt - eat)
 
-        try: 
-            res[:, 2] = s0 * egt + (alpha * kc / gamma) * (1 - egt)
-            res[:, 2] += ((beta / (gamma - beta)) *
-                        ((alpha * kc / beta) - u0 - const) * (egt - ebt))
-            res[:, 2] += (beta / (gamma - alpha_c)) * const * (egt - eat)
-        except:
-            print("s calculation failed.")
-            print("gene:", settings.GENE)
+        res[:, 2] = s0 * egt + (alpha * kc / gamma) * (1 - egt)
+        res[:, 2] += ((beta / (gamma - beta)) *
+                    ((alpha * kc / beta) - u0 - const) * (egt - ebt))
+        res[:, 2] += (beta / (gamma - alpha_c)) * const * (egt - eat)
+
     else:
         res[:, 1] = np.zeros(len(tau))
         res[:, 2] = np.zeros(len(tau))
@@ -597,7 +582,6 @@ def compute_velocity(t,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    #check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -773,7 +757,7 @@ def calculate_dist_and_time(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    #check_params(alpha_c, alpha, beta, gamma)
+    check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -971,7 +955,7 @@ def compute_likelihood(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    #check_params(alpha_c, alpha, beta, gamma)
+    check_params(alpha_c, alpha, beta, gamma)
     exp_list, _ = generate_exp(typed_tau_list,
                                t_sw_array[:switch],
                                alpha_c,
@@ -1704,6 +1688,7 @@ class ChromatinDynamical:
             new_time = self.t
             new_state = self.state
 
+        check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(new_time,
                                       self.t_sw_array,
                                       new_state,
@@ -1727,8 +1712,8 @@ class ChromatinDynamical:
         switch = np.sum(self.t_sw_array < 20)
         typed_tau_list = List()
         [typed_tau_list.append(x) for x in tau_list]
-        #check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
-                     #c0=self.c0, u0=self.u0, s0=self.s0)
+        check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
+                     c0=self.c0, u0=self.u0, s0=self.s0)
         exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                              self.t_sw_array[:switch],
                                              self.alpha_c,
@@ -1753,6 +1738,7 @@ class ChromatinDynamical:
                                         for x in range(switch)]))
         s_sw = np.ravel(np.concatenate([exp_sw_list[x][:, 2]
                                         for x in range(switch)]))
+        check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(anchor_time,
                                       self.t_sw_array,
                                       None,
@@ -2198,8 +2184,8 @@ class ChromatinDynamical:
                 switch = np.sum(self.t_sw_array < 20)
                 typed_tau_list = List()
                 [typed_tau_list.append(x) for x in tau_list]
-                #check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
-                             #c0=self.c0, u0=self.u0, s0=self.s0)
+                check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
+                             c0=self.c0, u0=self.u0, s0=self.s0)
                 exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                                      self.t_sw_array[:switch],
                                                      self.alpha_c,
