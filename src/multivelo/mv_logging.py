@@ -18,9 +18,6 @@ def _msg(msg, code):
 
     msg = str(msg) + "\n"
 
-    if code == 2:
-        raise Exception(msg)
-
     return msg
 
 

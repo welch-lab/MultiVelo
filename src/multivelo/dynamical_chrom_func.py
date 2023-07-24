@@ -21,7 +21,7 @@ import math
 from multivelo import mv_logging as logg
 from multivelo import settings
 
-# @jit(nopython=True, fastmath=True)
+
 def check_params(alpha_c,
                  alpha,
                  beta,
@@ -30,57 +30,95 @@ def check_params(alpha_c,
                  u0=None,
                  s0=None):
 
+    new_alpha_c = alpha_c
+    new_alpha = alpha
+    new_beta = beta
+    new_gamma = gamma
+
+    new_c0 = c0
+    new_u0 = u0
+    new_s0 = s0
+
+    inf_fix = 1e10
+    zero_fix = 1e-10
+
     # check if any of our parameters are infinite
     if c0 is not None and math.isinf(c0):
         logg.error("c0 is infinite.", v=1)
+        new_c0 = inf_fix
     if u0 is not None and math.isinf(u0):
         logg.error("u0 is infinite.", v=1)
+        new_u0 = inf_fix
     if s0 is not None and math.isinf(s0):
         logg.error("s0 is infinite.", v=1)
+        new_s0 = inf_fix
     if math.isinf(alpha_c):
+        new_alpha_c = inf_fix
         logg.error("alpha_c is infinite.", v=1)
     if math.isinf(alpha):
+        new_alpha = inf_fix
         logg.error("alpha is infinite.", v=1)
     if math.isinf(beta):
+        new_beta = inf_fix
         logg.error("beta is infinite.", v=1)
     if math.isinf(gamma):
+        new_gamma = inf_fix
         logg.error("gamma is infinite.", v=1)
 
     # check if any of our parameters are nan
     if c0 is not None and math.isnan(c0):
-        logg.error("c0 is infinite.", v=1)
+        logg.error("c0 is Nan.", v=1)
+        new_c0 = zero_fix
     if u0 is not None and math.isnan(u0):
-        logg.error("u0 is infinite.", v=1)
+        logg.error("u0 is Nan.", v=1)
+        new_u0 = zero_fix
     if s0 is not None and math.isnan(s0):
-        logg.error("s0 is infinite.", v=1)
+        logg.error("s0 is Nan.", v=1)
+        new_s0 = zero_fix
     if math.isnan(alpha_c):
-        logg.error("alpha_c is infinite.", v=1)
+        new_alpha_c = zero_fix
+        logg.error("alpha_c is Nan.", v=1)
     if math.isnan(alpha):
-        logg.error("alpha is infinite.", v=1)
+        new_alpha = zero_fix
+        logg.error("alpha is Nan.", v=1)
     if math.isnan(beta):
-        logg.error("beta is infinite.", v=1)
+        new_beta = zero_fix
+        logg.error("beta is Nan.", v=1)
     if math.isnan(gamma):
-        logg.error("gamma is infinite.", v=1)
+        new_gamma = zero_fix
+        logg.error("gamma is Nan.", v=1)
 
     # check if any of our rate parameters are 0
     if alpha_c < 1e-7:
+        new_alpha_c = zero_fix
         logg.error("alpha_c is zero.", v=1)
     if alpha < 1e-7:
+        new_alpha = zero_fix
         logg.error("alpha is zero.", v=1)
     if beta < 1e-7:
+        new_beta = zero_fix
         logg.error("beta is zero.", v=1)
     if gamma < 1e-7:
+        new_gamma = zero_fix
         logg.error("gamma is zero.", v=1)
 
     if beta == alpha_c:
+        new_beta += zero_fix
         logg.error("alpha_c and beta are equal, leading to divide by zero",
                     v=1)
     if beta == gamma:
+        new_gamma += zero_fix
         logg.error("gamma and beta are equal, leading to divide by zero",
                     v=1)
     if alpha_c == gamma:
+        new_gamma += zero_fix
         logg.error("gamma and alpha_c are equal, leading to divide by zero",
                     v=1)
+
+    if c0 is not None and u0 is not None and s0 is not None:
+        return new_alpha_c, new_alpha, new_beta, new_gamma, new_c0, new_u0, new_s0
+
+    return new_alpha_c, new_alpha, new_beta, new_gamma
 
 # @jit(nopython=True, fastmath=True, debug=True)
 # def check_params(alpha_c,
@@ -757,7 +795,7 @@ def calculate_dist_and_time(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    check_params(alpha_c, alpha, beta, gamma)
+    alpha_c, alpha, beta, gamma = check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -955,7 +993,7 @@ def compute_likelihood(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    check_params(alpha_c, alpha, beta, gamma)
+    alpha_c, alpha, beta, gamma = check_params(alpha_c, alpha, beta, gamma)
     exp_list, _ = generate_exp(typed_tau_list,
                                t_sw_array[:switch],
                                alpha_c,
@@ -1688,7 +1726,8 @@ class ChromatinDynamical:
             new_time = self.t
             new_state = self.state
 
-        check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
+        self.alpha_c, self.alpha, self.beta, self.gamma = \
+            check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(new_time,
                                       self.t_sw_array,
                                       new_state,
@@ -1712,8 +1751,10 @@ class ChromatinDynamical:
         switch = np.sum(self.t_sw_array < 20)
         typed_tau_list = List()
         [typed_tau_list.append(x) for x in tau_list]
-        check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
-                     c0=self.c0, u0=self.u0, s0=self.s0)
+        self.alpha_c, self.alpha, self.beta, self.gamma, \
+            self.c0, self.u0, self.s0 = \
+            check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
+                         c0=self.c0, u0=self.u0, s0=self.s0)
         exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                              self.t_sw_array[:switch],
                                              self.alpha_c,
@@ -1738,7 +1779,8 @@ class ChromatinDynamical:
                                         for x in range(switch)]))
         s_sw = np.ravel(np.concatenate([exp_sw_list[x][:, 2]
                                         for x in range(switch)]))
-        check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
+        self.alpha_c, self.alpha, self.beta, self.gamma = \
+            check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(anchor_time,
                                       self.t_sw_array,
                                       None,
@@ -2184,8 +2226,11 @@ class ChromatinDynamical:
                 switch = np.sum(self.t_sw_array < 20)
                 typed_tau_list = List()
                 [typed_tau_list.append(x) for x in tau_list]
-                check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
-                             c0=self.c0, u0=self.u0, s0=self.s0)
+                self.alpha_c, self.alpha, self.beta, self.gamma, \
+                    self.c0, self.u0, self.s0 = \
+                    check_params(self.alpha_c, self.alpha, self.beta,
+                                 self.gamma, c0=self.c0, u0=self.u0,
+                                 s0=self.s0)
                 exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                                      self.t_sw_array[:switch],
                                                      self.alpha_c,
