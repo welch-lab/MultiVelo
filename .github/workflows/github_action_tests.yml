@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [main, next, ga_test]
+    branches: [main, next, version_issues]
   pull_request:
-    branches: [main, next, ga_test]
+    branches: [main, next, version_issues]
 
 jobs:
   test:
@@ -16,9 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ["windows-latest", "ubuntu-latest", "macos-11"]
-            python: ["3.9", "3.10"]
+        os: [windows-latest, ubuntu-latest, macos-11]
+        python: ["3.9", "3.10"]
 
     env:
       OS: ${{ matrix.os }}
@@ -37,9 +36,9 @@ jobs:
           cd src/multivelo
           git add .
           pre-commit run --verbose --color=always --show-diff-on-failure \
-          --files auxiliary.py \
-          dynamical_chrom_func.py \
-          steady_chrom_func.py
+          --files src/multivelo/auxiliary.py \
+          src/multivelo/dynamical_chrom_func.py \
+          src/multivelo/steady_chrom_func.py
       - name: Test with pytest
         run: |
           pytest

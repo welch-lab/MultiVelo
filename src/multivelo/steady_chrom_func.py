@@ -414,7 +414,7 @@ def velocity_chrom(adata_rna,
     gn = len(gene_list)
     if gn == 0:
         raise ValueError('None of the genes specified are in the adata object')
-    
+
     logg.update(f'{gn} genes will be fitted', v=1)
 
     velo_s = np.zeros((adata_rna.n_obs, gn))

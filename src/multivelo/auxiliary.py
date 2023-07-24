@@ -72,7 +72,7 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
             raise ValueError('Peak annotation file should contain 4 columns '
                              '(CellRanger ARC 1.0.0) or 6 columns (CellRanger '
                              'ARC 2.0.0)')
-       
+
         logg.update(f'CellRanger ARC identified as {cellranger_version}.0.0',
                     v=1)
 

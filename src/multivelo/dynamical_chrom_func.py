@@ -128,7 +128,7 @@ def check_params(alpha_c,
 #                  c0=None,
 #                  u0=None,
 #                  s0=None):
-    
+
 #     # check if any of our parameters are infinite
 #     if c0 is not None and math.isinf(c0):
 #         logg.error("c0 is infinite.", v=1)
