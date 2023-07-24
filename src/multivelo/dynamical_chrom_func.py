@@ -16,9 +16,172 @@ from numba import jit
 from numba.typed import List
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
+import math
+
+from multivelo import mv_logging as logg
+from multivelo import settings
 
 
-@jit(nopython=True, fastmath=True)
+def check_params(alpha_c,
+                 alpha,
+                 beta,
+                 gamma,
+                 c0=None,
+                 u0=None,
+                 s0=None):
+
+    new_alpha_c = alpha_c
+    new_alpha = alpha
+    new_beta = beta
+    new_gamma = gamma
+
+    new_c0 = c0
+    new_u0 = u0
+    new_s0 = s0
+
+    inf_fix = 1e10
+    zero_fix = 1e-10
+
+    # check if any of our parameters are infinite
+    if c0 is not None and math.isinf(c0):
+        logg.error("c0 is infinite.", v=1)
+        new_c0 = inf_fix
+    if u0 is not None and math.isinf(u0):
+        logg.error("u0 is infinite.", v=1)
+        new_u0 = inf_fix
+    if s0 is not None and math.isinf(s0):
+        logg.error("s0 is infinite.", v=1)
+        new_s0 = inf_fix
+    if math.isinf(alpha_c):
+        new_alpha_c = inf_fix
+        logg.error("alpha_c is infinite.", v=1)
+    if math.isinf(alpha):
+        new_alpha = inf_fix
+        logg.error("alpha is infinite.", v=1)
+    if math.isinf(beta):
+        new_beta = inf_fix
+        logg.error("beta is infinite.", v=1)
+    if math.isinf(gamma):
+        new_gamma = inf_fix
+        logg.error("gamma is infinite.", v=1)
+
+    # check if any of our parameters are nan
+    if c0 is not None and math.isnan(c0):
+        logg.error("c0 is Nan.", v=1)
+        new_c0 = zero_fix
+    if u0 is not None and math.isnan(u0):
+        logg.error("u0 is Nan.", v=1)
+        new_u0 = zero_fix
+    if s0 is not None and math.isnan(s0):
+        logg.error("s0 is Nan.", v=1)
+        new_s0 = zero_fix
+    if math.isnan(alpha_c):
+        new_alpha_c = zero_fix
+        logg.error("alpha_c is Nan.", v=1)
+    if math.isnan(alpha):
+        new_alpha = zero_fix
+        logg.error("alpha is Nan.", v=1)
+    if math.isnan(beta):
+        new_beta = zero_fix
+        logg.error("beta is Nan.", v=1)
+    if math.isnan(gamma):
+        new_gamma = zero_fix
+        logg.error("gamma is Nan.", v=1)
+
+    # check if any of our rate parameters are 0
+    if alpha_c < 1e-7:
+        new_alpha_c = zero_fix
+        logg.error("alpha_c is zero.", v=1)
+    if alpha < 1e-7:
+        new_alpha = zero_fix
+        logg.error("alpha is zero.", v=1)
+    if beta < 1e-7:
+        new_beta = zero_fix
+        logg.error("beta is zero.", v=1)
+    if gamma < 1e-7:
+        new_gamma = zero_fix
+        logg.error("gamma is zero.", v=1)
+
+    if beta == alpha_c:
+        new_beta += zero_fix
+        logg.error("alpha_c and beta are equal, leading to divide by zero",
+                    v=1)
+    if beta == gamma:
+        new_gamma += zero_fix
+        logg.error("gamma and beta are equal, leading to divide by zero",
+                    v=1)
+    if alpha_c == gamma:
+        new_gamma += zero_fix
+        logg.error("gamma and alpha_c are equal, leading to divide by zero",
+                    v=1)
+
+    if c0 is not None and u0 is not None and s0 is not None:
+        return new_alpha_c, new_alpha, new_beta, new_gamma, new_c0, new_u0, new_s0
+
+    return new_alpha_c, new_alpha, new_beta, new_gamma
+
+# @jit(nopython=True, fastmath=True, debug=True)
+# def check_params(alpha_c,
+#                  alpha,
+#                  beta,
+#                  gamma,
+#                  c0=None,
+#                  u0=None,
+#                  s0=None):
+    
+#     # check if any of our parameters are infinite
+#     if c0 is not None and math.isinf(c0):
+#         logg.error("c0 is infinite.", v=1)
+#     if u0 is not None and math.isinf(u0):
+#         logg.error("u0 is infinite.", v=1)
+#     if s0 is not None and math.isinf(s0):
+#         logg.error("s0 is infinite.", v=1)
+#     if math.isinf(alpha_c):
+#         logg.error("alpha_c is infinite.", v=1)
+#     if math.isinf(alpha):
+#         logg.error("alpha is infinite.", v=1)
+#     if math.isinf(beta):
+#         logg.error("beta is infinite.", v=1)
+#     if math.isinf(gamma):
+#         logg.error("gamma is infinite.", v=1)
+
+#     # check if any of our parameters are nan
+#     if c0 is not None and math.isnan(c0):
+#         logg.error("c0 is infinite.", v=1)
+#     if u0 is not None and math.isnan(u0):
+#         logg.error("u0 is infinite.", v=1)
+#     if s0 is not None and math.isnan(s0):
+#         logg.error("s0 is infinite.", v=1)
+#     if math.isnan(alpha_c):
+#         logg.error("alpha_c is infinite.", v=1)
+#     if math.isnan(alpha):
+#         logg.error("alpha is infinite.", v=1)
+#     if math.isnan(beta):
+#         logg.error("beta is infinite.", v=1)
+#     if math.isnan(gamma):
+#         logg.error("gamma is infinite.", v=1)
+
+#     # check if any of our rate parameters are 0
+#     if alpha_c < 1e-7:
+#         logg.error("alpha_c is zero.", v=1)
+#     if alpha < 1e-7:
+#         logg.error("alpha is zero.", v=1)
+#     if beta < 1e-7:
+#         logg.error("beta is zero.", v=1)
+#     if gamma < 1e-7:
+#         logg.error("gamma is zero.", v=1)
+
+#     if beta == alpha_c:
+#         logg.error("alpha_c and beta are equal, leading to divide by zero",
+#                     v=1)
+#     if beta == gamma:
+#         logg.error("gamma and beta are equal, leading to divide by zero",
+#                     v=1)
+#     if alpha_c == gamma:
+#         logg.error("gamma and alpha_c are equal, leading to divide by zero",
+#                     v=1)
+
+@jit(nopython=True, fastmath=True, debug=True)
 def predict_exp(tau,
                 c0,
                 u0,
@@ -32,6 +195,14 @@ def predict_exp(tau,
                 chrom_open=True,
                 backward=False,
                 rna_only=False):
+
+    # check_params(alpha_c,
+    #              alpha,
+    #              beta,
+    #              gamma,
+    #              c0,
+    #              u0,
+    #              s0)
 
     if len(tau) == 0:
         return np.empty((0, 3))
@@ -50,23 +221,28 @@ def predict_exp(tau,
         else:
             kc = 0
             alpha_c *= scale_cc
+
     const = (kc - c0) * alpha / (beta - alpha_c)
+
     res[:, 0] = kc - (kc - c0) * eat
+
     if pred_r:
+
         res[:, 1] = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
         res[:, 1] += const * (ebt - eat)
 
         res[:, 2] = s0 * egt + (alpha * kc / gamma) * (1 - egt)
         res[:, 2] += ((beta / (gamma - beta)) *
-                      ((alpha * kc / beta) - u0 - const) * (egt - ebt))
+                    ((alpha * kc / beta) - u0 - const) * (egt - ebt))
         res[:, 2] += (beta / (gamma - alpha_c)) * const * (egt - eat)
+
     else:
         res[:, 1] = np.zeros(len(tau))
         res[:, 2] = np.zeros(len(tau))
     return res
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def generate_exp(tau_list,
                  t_sw_array,
                  alpha_c,
@@ -245,7 +421,7 @@ def generate_exp(tau_list,
     return (exp1, exp2, exp3, exp4), (exp_sw1, exp_sw2, exp_sw3)
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
                           scale_cc=1, model=1):
     if beta == alpha_c:
@@ -351,7 +527,7 @@ def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
     return (exp1, exp2, exp3), (exp_sw1, exp_sw2)
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def ss_exp(alpha_c, alpha, beta, gamma, pred_r=True, chrom_open=True):
     res = np.empty((1, 3))
     if not chrom_open:
@@ -369,7 +545,7 @@ def ss_exp(alpha_c, alpha, beta, gamma, pred_r=True, chrom_open=True):
     return res
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def compute_ss_exp(alpha_c, alpha, beta, gamma, model=0):
     if model == 0:
         ss1 = ss_exp(alpha_c, alpha, beta, gamma, pred_r=False)
@@ -390,7 +566,7 @@ def compute_ss_exp(alpha_c, alpha, beta, gamma, model=0):
     return np.vstack((ss1, ss2, ss3, ss4))
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
                        pred_r=True, chrom_open=True, rna_only=False):
     if rna_only:
@@ -410,7 +586,7 @@ def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
             return alpha_c - alpha_c * c, np.zeros(len(u)), np.zeros(len(u))
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def compute_velocity(t,
                      t_sw_array,
                      state,
@@ -584,7 +760,7 @@ def anchor_points(t_sw_array, total_h=20, t=1000, mode='uniform',
         return tau_list
 
 
-@jit(nopython=True, fastmath=True)
+@jit(nopython=True, fastmath=True, debug=True)
 def pairwise_distance_square(X, Y):
     res = np.empty((X.shape[0], Y.shape[0]), dtype=X.dtype)
     for a in range(X.shape[0]):
@@ -619,6 +795,7 @@ def calculate_dist_and_time(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
+    alpha_c, alpha, beta, gamma = check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -816,6 +993,7 @@ def compute_likelihood(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
+    alpha_c, alpha, beta, gamma = check_params(alpha_c, alpha, beta, gamma)
     exp_list, _ = generate_exp(typed_tau_list,
                                t_sw_array[:switch],
                                alpha_c,
@@ -880,7 +1058,6 @@ class ChromatinDynamical:
                  local_std=None,
                  embed_coord=None,
                  connectivities=None,
-                 verbose=False,
                  plot=False,
                  save_plot=False,
                  plot_dir=None,
@@ -900,7 +1077,6 @@ class ChromatinDynamical:
         self.gene = gene
         self.local_std = local_std
         self.conn = connectivities
-        self.verbose = verbose
 
         # fitting arguments
         self.init_mode = init_mode
@@ -988,16 +1164,16 @@ class ChromatinDynamical:
                                              self.non_zero & self.non_outlier)]
         else:
             self.conn_sub = None
-        if self.verbose >= 2:
-            print(f'{len(self.u)} cells passed filter and will be used to '
-                  'compute trajectories.')
+
+        logg.update(f'{len(self.u)} cells passed filter and will be used to '
+                    'compute trajectories.', v=2)
         self.known_pars = (True
                            if None not in [rescale_u, alpha, beta, gamma, t_]
                            else False)
-        if self.known_pars and self.verbose >= 1:
-            print(f'known parameters for gene {self.gene} are '
-                  'scaling={rescale_u}, alpha={alpha}, beta={beta},'
-                  ' gamma={gamma}, t_={t_}.')
+        if self.known_pars:
+            logg.update(f'known parameters for gene {self.gene} are '
+                        f'scaling={rescale_u}, alpha={alpha}, beta={beta},'
+                        f' gamma={gamma}, t_={t_}.', v=1)
 
         # 4 rate parameters
         self.alpha_c = 0.1
@@ -1102,12 +1278,11 @@ class ChromatinDynamical:
         if np.sum(w_low) < 10:
             fit_gmm = False
             self.partial = True
-        if self.verbose >= 2:
-            if self.local_std is None:
-                print('Warning: local standard deviation not provided. '
-                      'Skipping GMM..')
-            if self.embed_coord is None:
-                print('Warning: embedded coordinates not provided. '
+        if self.local_std is None:
+            logg.warn('local standard deviation not provided. '
+                      'Skipping GMM..', v=2)
+        if self.embed_coord is None:
+            logg.warn('Warning: embedded coordinates not provided. '
                       'Skipping GMM..')
         if (fit_gmm and self.local_std is not None and self.embed_coord
                 is not None):
@@ -1120,19 +1295,17 @@ class ChromatinDynamical:
                                     random_state=2021).fit(dists)
             mean_diff = np.abs(model.means_[1][0] - model.means_[0][0])
             criterion1 = mean_diff > self.local_std / self.tm
-            if self.verbose >= 2:
-                print(f'GMM: difference between means = {mean_diff}, '
-                      'threshold = {self.local_std / self.tm}.')
+            logg.update(f'GMM: difference between means = {mean_diff}, '
+                        f'threshold = {self.local_std / self.tm}.', v=2)
             criterion2 = np.all(model.weights_[1] > 0.2 / self.tm)
-            if self.verbose >= 2:
-                print('GMM: weight of the second Gaussian ='
-                      f' {model.weights_[1]}.')
+            logg.update('GMM: weight of the second Gaussian ='
+                        f' {model.weights_[1]}.', v=2)
             if criterion1 and criterion2:
                 self.partial = False
             else:
                 self.partial = True
-            if self.verbose >= 2:
-                print(f'GMM decides {"" if self.partial else "not "}partial.')
+            logg.update(f'GMM decides {"" if self.partial else "not "}'
+                        'partial.', v=2)
 
         # steady-state slope
         wu = self.u >= np.percentile(u_non_zero, 95)
@@ -1169,16 +1342,15 @@ class ChromatinDynamical:
             off_ = slope_ < gamma
             on_dist = np.sum((u_non_zero[on_] - gamma * s_non_zero[on_])**2)
             off_dist = np.sum((gamma * s_non_zero[off_] - u_non_zero[off_])**2)
-            if self.verbose >= 2:
-                print(f'Slope: SSE on induction phase = {on_dist},'
-                      f' SSE on repression phase = {off_dist}.')
+            logg.update(f'Slope: SSE on induction phase = {on_dist},'
+                        f' SSE on repression phase = {off_dist}.', v=2)
             if self.thickness < 1.5 / np.sqrt(self.tm):
                 narrow = True
             else:
                 narrow = False
-            if self.verbose >= 2:
-                print(f'Thickness of trajectory = {self.thickness}. '
-                      'Trajectory is {"narrow" if narrow else "normal"}.')
+            logg.update(f'Thickness of trajectory = {self.thickness}. '
+                        f'Trajectory is {"narrow" if narrow else "normal"}.',
+                        v=2)
             if on_dist > 10 * self.tm**2 * off_dist:
                 self.direction = 'on'
                 self.partial = True
@@ -1232,12 +1404,14 @@ class ChromatinDynamical:
         if determine_model:
             self.model = self.model_
 
-        if self.verbose >= 1 and not self.known_pars:
+        if not self.known_pars:
             if fit_gmm or fit_slope:
-                print(f'predicted partial trajectory: {self.partial}')
-                print(f'predicted trajectory direction: {self.direction}')
+                logg.update(f'predicted partial trajectory: {self.partial}',
+                            v=1)
+                logg.update('predicted trajectory direction:'
+                            f'{self.direction}', v=1)
             if determine_model:
-                print(f'predicted model: {self.model}')
+                logg.update(f'predicted model: {self.model}', v=1)
 
     def initialize_steady_state_params(self, model_mismatch=False):
         self.scale_cc = 1.0
@@ -1439,10 +1613,11 @@ class ChromatinDynamical:
                                     + self.params[2]])
         self.t_sw_1, self.t_sw_2, self.t_sw_3 = self.t_sw_array
 
-        if self.verbose >= 1:
-            print(f'initial params: {self.t_sw_array} {self.rates} '
-                  '{self.rescale_c} {self.rescale_u}')
-            print(f'initial loss: {self.loss[-1]}')
+        logg.update(f'initial params:\nswitch time array = {self.t_sw_array},\n'
+                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
+                    f'c rescale factor = {self.rescale_c},\n'
+                    f'u rescale factor = {self.rescale_u}', v=1)
+        logg.update(f'initial loss: {self.loss[-1]}', v=1)
 
     def fit(self):
         if self.low_quality:
@@ -1480,8 +1655,8 @@ class ChromatinDynamical:
             if last_t_sw > np.max(self.t):
                 gap_sum += 20 - last_t_sw
             realign_ratio = np.clip(20/(20 - gap_sum), None, 20/last_t_sw)
-            if self.verbose >= 1:
-                print(f'removing gaps and realigning by {realign_ratio}..')
+            logg.update(f'removing gaps and realigning by {realign_ratio}..',
+                        v=1)
             self.rates /= realign_ratio
             self.alpha_c, self.alpha, self.beta, self.gamma = self.rates
             self.params[:3] *= realign_ratio
@@ -1499,8 +1674,7 @@ class ChromatinDynamical:
             plt.show(block=True)
 
         # likelihood
-        if self.verbose >= 1:
-            print('computing likelihood..')
+        logg.update('computing likelihood..', v=1)
         keep = self.non_zero & self.non_outlier & \
             (self.u_all > 0.2 * np.percentile(self.u_all, 99.5)) & \
             (self.s_all > 0.2 * np.percentile(self.s_all, 99.5))
@@ -1529,14 +1703,15 @@ class ChromatinDynamical:
         else:
             self.likelihood, self.l_c, self.ssd_c, self.var_c, l_u = \
                 0, 0, 0, 0, 0
+            # TODO: Keep? Remove??
+            l_s = 0
 
-        if not self.rna_only and self.verbose >= 1:
-            print(f'likelihood of c: {self.l_c}, likelihood of u: {l_u}, '
-                  'likelihood of s: {l_s}')
+        if not self.rna_only:
+            logg.update(f'likelihood of c: {self.l_c}, likelihood of u: {l_u}, '
+                        f'likelihood of s: {l_s}', v=1)
 
         # velocity
-        if self.verbose >= 1:
-            print('computing velocities..')
+        logg.update('computing velocities..', v=1)
         self.velocity = np.empty((len(self.u_all), 3))
         if self.conn is not None:
             new_time = self.conn.dot(self.t)
@@ -1551,6 +1726,8 @@ class ChromatinDynamical:
             new_time = self.t
             new_state = self.state
 
+        self.alpha_c, self.alpha, self.beta, self.gamma = \
+            check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(new_time,
                                       self.t_sw_array,
                                       new_state,
@@ -1574,6 +1751,10 @@ class ChromatinDynamical:
         switch = np.sum(self.t_sw_array < 20)
         typed_tau_list = List()
         [typed_tau_list.append(x) for x in tau_list]
+        self.alpha_c, self.alpha, self.beta, self.gamma, \
+            self.c0, self.u0, self.s0 = \
+            check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
+                         c0=self.c0, u0=self.u0, s0=self.s0)
         exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                              self.t_sw_array[:switch],
                                              self.alpha_c,
@@ -1598,6 +1779,8 @@ class ChromatinDynamical:
                                         for x in range(switch)]))
         s_sw = np.ravel(np.concatenate([exp_sw_list[x][:, 2]
                                         for x in range(switch)]))
+        self.alpha_c, self.alpha, self.beta, self.gamma = \
+            check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(anchor_time,
                                       self.t_sw_array,
                                       None,
@@ -1636,17 +1819,18 @@ class ChromatinDynamical:
         self.anchor_velo_max_idx = np.sum(anchor_time < np.max(new_time)) - 1
 
         if self.save_plot:
-            if self.verbose >= 1:
-                print('saving plots..')
+            logg.update('saving plots..', v=1)
             self.save_dyn_plot(c_, u_, s_, c_sw_, u_sw_, s_sw_, tau_list)
 
         self.realign_time_and_velocity(c, u, s, anchor_time)
 
-        if self.verbose >= 1:
-            print(f'final params: {self.t_sw_array} {self.rates} '
-                  '{self.scale_cc} {self.rescale_c} {self.rescale_u}')
-            print(f'final loss: {self.loss[-1]}')
-            print(f'final likelihood: {self.likelihood}')
+        logg.update(f'final params:\nswitch time array = {self.t_sw_array},\n'
+                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
+                    f'c rescale factor = {self.rescale_c},\n'
+                    f'u rescale factor = {self.rescale_u}',
+                    v=1)
+        logg.update(f'final loss: {self.loss[-1]}', v=1)
+        logg.update(f'final likelihood: {self.likelihood}', v=1)
 
         return self.loss
 
@@ -1657,8 +1841,7 @@ class ChromatinDynamical:
 
             # RNA-only
             if self.rna_only:
-                if self.verbose >= 2:
-                    print('Nelder Mead on t_sw_2 and alpha..')
+                logg.update('Nelder Mead on t_sw_2 and alpha..', v=2)
                 self.fitting_flag_ = 0
                 if self.cur_iter == 1:
                     var_test = (self.alpha +
@@ -1674,8 +1857,8 @@ class ChromatinDynamical:
                                callback=self.update, options={'maxiter': 3})
 
                 if self.fit_rescale:
-                    if self.verbose >= 2:
-                        print('Nelder Mead on t_sw_2, beta, and rescale u..')
+                    logg.update('Nelder Mead on t_sw_2, beta, and rescale u..',
+                                v=2)
                     res = minimize(self.mse, x0=[self.params[1],
                                                  self.params[5],
                                                  self.params[9]],
@@ -1683,21 +1866,18 @@ class ChromatinDynamical:
                                    callback=self.update,
                                    options={'maxiter': 5})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on alpha and gamma..')
+                logg.update('Nelder Mead on alpha and gamma..', v=2)
                 self.fitting_flag_ = 1
                 res = minimize(self.mse, x0=[self.params[4], self.params[6]],
                                method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 3})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on t_sw_2..')
+                logg.update('Nelder Mead on t_sw_2..', v=2)
                 res = minimize(self.mse, x0=[self.params[1]],
                                method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 2})
 
-                if self.verbose >= 2:
-                    print('Full Nelder Mead..')
+                logg.update('Full Nelder Mead..', v=2)
                 res = minimize(self.mse, x0=[self.params[1], self.params[4],
                                              self.params[5], self.params[6]],
                                method='Nelder-Mead', tol=1e-2,
@@ -1705,9 +1885,8 @@ class ChromatinDynamical:
 
             # chromatin-RNA
             else:
-                if self.verbose >= 2:
-                    print('Nelder Mead on t_sw_1, chromatin switch time, and '
-                          'alpha_c..')
+                logg.update('Nelder Mead on t_sw_1, chromatin switch time, and'
+                            ' alpha_c..', v=2)
                 self.fitting_flag_ = 1
                 if self.cur_iter == 1:
                     var_test = (self.gamma + np.array([-1, -0.5, 0.5, 1])
@@ -1731,9 +1910,8 @@ class ChromatinDynamical:
                                    callback=self.update,
                                    options={'maxiter': 20})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on chromatin switch time, chromatin '
-                          'closing rate scaling, and rescale c..')
+                logg.update('Nelder Mead on chromatin switch time, chromatin '
+                            'closing rate scaling, and rescale c..', v=2)
                 self.fitting_flag_ = 2
                 if self.model == 0 or self.model == 1:
                     res = minimize(self.mse, x0=[self.params[1],
@@ -1750,8 +1928,7 @@ class ChromatinDynamical:
                                    callback=self.update,
                                    options={'maxiter': 20})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on rna switch time and alpha..')
+                logg.update('Nelder Mead on rna switch time and alpha..', v=2)
                 self.fitting_flag_ = 1
                 if self.model == 0 or self.model == 1:
                     res = minimize(self.mse, x0=[self.params[2],
@@ -1766,9 +1943,8 @@ class ChromatinDynamical:
                                    callback=self.update,
                                    options={'maxiter': 10})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on rna switch time, beta, and '
-                          'rescale u..')
+                logg.update('Nelder Mead on rna switch time, beta, and '
+                            'rescale u..', v=2)
                 self.fitting_flag_ = 3
                 if self.model == 0 or self.model == 1:
                     res = minimize(self.mse, x0=[self.params[2],
@@ -1785,22 +1961,19 @@ class ChromatinDynamical:
                                    callback=self.update,
                                    options={'maxiter': 20})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on alpha and gamma..')
+                logg.update('Nelder Mead on alpha and gamma..', v=2)
                 self.fitting_flag_ = 2
                 res = minimize(self.mse, x0=[self.params[4], self.params[6]],
                                method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 10})
 
-                if self.verbose >= 2:
-                    print('Nelder Mead on t_sw..')
+                logg.update('Nelder Mead on t_sw..', v=2)
                 self.fitting_flag_ = 4
                 res = minimize(self.mse, x0=self.params[:3],
                                method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 20})
 
-            if self.verbose >= 2:
-                print(f'iteration {self.cur_iter} finished')
+            logg.update(f'iteration {self.cur_iter} finished', v=2)
 
     def _variables(self, x):
         scale_cc = self.scale_cc
@@ -2043,10 +2216,9 @@ class ChromatinDynamical:
             if fit_outlier:
                 self.t = t_pred
 
-            if self.verbose >= 2:
-                print(f'params updated as: {self.t_sw_array} {self.rates} '
-                      '{self.scale_cc} {self.rescale_c} {self.rescale_u}')
-                print(f'current loss: {self.loss[-1]}')
+            logg.update(f'params updated as: {self.t_sw_array} {self.rates} '
+                        f'{self.scale_cc} {self.rescale_c} {self.rescale_u}',
+                        v=2)
 
             # interactive plot
             if self.plot and plot:
@@ -2054,6 +2226,11 @@ class ChromatinDynamical:
                 switch = np.sum(self.t_sw_array < 20)
                 typed_tau_list = List()
                 [typed_tau_list.append(x) for x in tau_list]
+                self.alpha_c, self.alpha, self.beta, self.gamma, \
+                    self.c0, self.u0, self.s0 = \
+                    check_params(self.alpha_c, self.alpha, self.beta,
+                                 self.gamma, c0=self.c0, u0=self.u0,
+                                 s0=self.s0)
                 exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                                      self.t_sw_array[:switch],
                                                      self.alpha_c,
@@ -2140,8 +2317,7 @@ class ChromatinDynamical:
                       show_all=False):
         if not os.path.exists(self.plot_path):
             os.makedirs(self.plot_path)
-            if self.verbose >= 2:
-                print(f'{self.plot_path} directory created.')
+            logg.update(f'{self.plot_path} directory created.', v=2)
 
         switch = np.sum(self.t_sw_array < 20)
         scale_back = np.array([self.scale_c, self.scale_u, self.scale_s])
@@ -2449,10 +2625,13 @@ class ChromatinDynamical:
         self.u0 = u[self.anchor_min_idx]
         self.s0 = s[self.anchor_min_idx]
         self.realign_ratio = 20 / (np.max(self.t) - np.min(self.t))
-        if self.verbose >= 1:
-            print(f'fitted params: {self.t_sw_array} {self.rates} '
-                  '{self.scale_cc} {self.rescale_c} {self.rescale_u}')
-            print(f'aligning to range (0,20) by {self.realign_ratio}..')
+        logg.update(f'fitted params:\nswitch time array = {self.t_sw_array},\n'
+                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
+                    f'c rescale factor = {self.rescale_c},\n'
+                    f'u rescale factor = {self.rescale_u}',
+                    v=1)
+        logg.update(f'aligning to range (0,20) by {self.realign_ratio}..',
+                    v=1)
         self.rates /= self.realign_ratio
         self.alpha_c, self.alpha, self.beta, self.gamma = self.rates
         self.params[3:7] = self.rates
@@ -2511,13 +2690,19 @@ class ChromatinDynamical:
             self.anchor_velo_min_idx, self.anchor_velo_max_idx
 
 
-def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, v, pl, sp, pdir, fa,
-                 gene, pa, di, ro, fit, fd, extra, ru, alpha, beta, gamma, t_):
+def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, pl, sp, pdir, fa,
+                 gene, pa, di, ro, fit, fd, extra, ru, alpha, beta, gamma, t_,
+                 verbosity, log_folder, log_filename):
 
-    if v >= 1 and m is not None:
-        print('###############################################################'
-              '################################')
-        print(f'testing model {m}')
+    settings.VERBOSITY = verbosity
+    settings.LOG_FOLDER = log_folder
+    settings.LOG_FILENAME = log_filename
+    settings.GENE = gene
+
+    if m is not None:
+        logg.update('#########################################################'
+                    '######################################', v=1)
+        logg.update(f'testing model {m}', v=1)
 
     c_90 = np.percentile(c, 90)
     u_90 = np.percentile(u, 90)
@@ -2525,8 +2710,7 @@ def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, v, pl, sp, pdir, fa,
     low_quality = (u_90 == 0 or s_90 == 0) if ro else (c_90 == 0 or u_90 == 0
                                                        or s_90 == 0)
     if low_quality:
-        if v >= 1:
-            print(f'low quality gene {gene}, skipping')
+        logg.update(f'low quality gene {gene}, skipping', v=1)
         return (np.inf, np.nan, '', (np.zeros(3), np.zeros(4), 0, 0, 0, 0),
                 np.zeros(3), np.zeros(len(u)), np.zeros(len(u)),
                 np.zeros((len(u), 3)), (-1.0, 0, 0, 0),
@@ -2555,7 +2739,6 @@ def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, v, pl, sp, pdir, fa,
                              local_std=local_std,
                              embed_coord=embed,
                              connectivities=conn,
-                             verbose=v,
                              plot=pl,
                              save_plot=sp,
                              plot_dir=pdir,
@@ -2573,8 +2756,8 @@ def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, v, pl, sp, pdir, fa,
                              t_=t_)
     if fit:
         loss = cdc.fit()
-        if loss[-1] == np.inf and v >= 1:
-            print(f'low quality gene {gene}, skipping..')
+        if loss[-1] == np.inf:
+            logg.update(f'low quality gene {gene}, skipping..', v=1)
     loss = cdc.get_loss()
     model = cdc.get_model()
     direction = cdc.get_direction()
@@ -2596,7 +2779,6 @@ def multimodel_helper(c, u, s,
                       global_pdist,
                       embed_coord,
                       conn,
-                      verbose,
                       plot,
                       save_plot,
                       plot_dir,
@@ -2612,8 +2794,8 @@ def multimodel_helper(c, u, s,
                       alpha,
                       beta,
                       gamma,
-                      t_
-                      ):
+                      t_,
+                      verbosity, log_folder, log_filename):
 
     loss, param_cand, initial_cand, time_cand = [], [], [], []
     state_cand, velo_cand, likelihood_cand, anch_cand = [], [], [], []
@@ -2622,7 +2804,7 @@ def multimodel_helper(c, u, s,
         (loss_m, _, direction_, parameters, initial_exp,
          time, state, velocity, likelihood, anchors) = \
          regress_func(c, u, s, model, max_iter, init_mode, global_pdist,
-                      embed_coord, conn, verbose, plot, save_plot, plot_dir,
+                      embed_coord, conn, plot, save_plot, plot_dir,
                       fit_args, gene, partial, direction, rna_only, fit,
                       fit_decoupling, extra_color, rescale_u, alpha, beta,
                       gamma, t_)
@@ -2654,7 +2836,6 @@ def recover_dynamics_chrom(adata_rna,
                            max_iter=5,
                            init_mode='invert',
                            model_to_run=None,
-                           verbose=False,
                            plot=False,
                            parallel=True,
                            n_jobs=None,
@@ -2710,9 +2891,6 @@ def recover_dynamics_chrom(adata_rna,
         for each gene will be inferred based on expression patterns. If more
         than one value is given,
         the best model will be decided based on loss of fit.
-    verbose: `int` or `bool` (default: `False`)
-        Level of fitting detail to output. Possible values: `False`, 0, 1, 2,
-        or any number above 2.
     plot: `bool` or `None` (default: `False`)
         Whether to interactively plot the 3D gene portraits. Ignored if
         parallel is True.
@@ -2905,8 +3083,8 @@ def recover_dynamics_chrom(adata_rna,
     rna_conn = rna_conn.multiply(1.0 / rna_conn.sum(1)).tocsr()
     if not rna_only:
         if 'connectivities' not in adata_atac.obsp.keys():
-            print('Missing connectivities in ATAC adata object, using RNA'
-                  ' connectivities instead')
+            logg.update('Missing connectivities in ATAC adata object, using '
+                        'RNA connectivities instead', v=1)
             atac_conn = rna_conn
         else:
             atac_conn = adata_atac.obsp['connectivities'].copy()
@@ -2940,10 +3118,7 @@ def recover_dynamics_chrom(adata_rna,
     gn = len(gene_list)
     if gn == 0:
         raise ValueError('None of the genes specified are in the adata object')
-    if verbose is True:
-        verbose = 1
-    if verbose >= 1:
-        print(f'{gn} genes will be fitted')
+    logg.update(f'{gn} genes will be fitted', v=1)
 
     models = np.zeros(gn)
     t_sws = np.zeros((gn, 3))
@@ -2980,8 +3155,8 @@ def recover_dynamics_chrom(adata_rna,
 
     if rna_only:
         model_to_run = [2]
-        if verbose >= 1:
-            print('Skipping model checking for RNA-only, running model 2')
+        logg.update('Skipping model checking for RNA-only, running model 2',
+                    v=1)
 
     m_per_g = False
     if model_to_run is not None:
@@ -3088,8 +3263,8 @@ def recover_dynamics_chrom(adata_rna,
         if n_jobs > gn:
             n_jobs = gn
         batches = -(-gn // n_jobs)
-        if n_jobs > 1 and verbose >= 1:
-            print(f'running {n_jobs} jobs in parallel')
+        if n_jobs > 1:
+            logg.update(f'running {n_jobs} jobs in parallel', v=1)
     else:
         n_jobs = 1
         batches = gn
@@ -3100,9 +3275,18 @@ def recover_dynamics_chrom(adata_rna,
     for group in range(batches):
         gene_indices = range(group * n_jobs, np.min([gn, (group+1) * n_jobs]))
         if parallel:
-            verb = 5 if verbose >= 2 else 0
-            verbose = False
+            verb = 51 if settings.VERBOSITY >= 2 else 0
             plot = False
+
+            # clear the settings file if it exists
+            open("settings.txt", "w").close()
+
+            # write our current settings to the file
+            with open("settings.txt", "a") as sfile:
+                sfile.write(str(settings.VERBOSITY) + "\n")
+                sfile.write(str(settings.CWD) + "\n")
+                sfile.write(str(settings.LOG_FOLDER) + "\n")
+                sfile.write(str(settings.LOG_FILENAME) + "\n")
 
             res = Parallel(n_jobs=n_jobs, backend='loky', verbose=verb)(
                 delayed(func_to_call)(
@@ -3115,7 +3299,6 @@ def recover_dynamics_chrom(adata_rna,
                     global_pdist,
                     embed_coord,
                     rna_conn,
-                    verbose,
                     plot,
                     save_plot,
                     plot_dir,
@@ -3134,7 +3317,10 @@ def recover_dynamics_chrom(adata_rna,
                     else beta,
                     gamma[i] if isinstance(gamma, (list, np.ndarray))
                     else gamma,
-                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw)
+                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw,
+                    settings.VERBOSITY,
+                    settings.LOG_FOLDER,
+                    settings.LOG_FILENAME)
                 for i in gene_indices)
 
             for i, r in zip(gene_indices, res):
@@ -3182,8 +3368,7 @@ def recover_dynamics_chrom(adata_rna,
         else:
             i = group
             gene = gene_list[i]
-            if verbose >= 1:
-                print(f'@@@@@fitting {gene}')
+            logg.update(f'@@@@@fitting {gene}', v=1)
             (loss, model, direct_out,
              parameters, initial_exp,
              time, state, velocity,
@@ -3191,7 +3376,7 @@ def recover_dynamics_chrom(adata_rna,
                 func_to_call(c_mat[:, i], u_mat[:, i], s_mat[:, i],
                              model_to_run[i] if m_per_g else model_to_run,
                              max_iter, init_mode, global_pdist, embed_coord,
-                             rna_conn, verbose, plot, save_plot, plot_dir,
+                             rna_conn, plot, save_plot, plot_dir,
                              fit_args, gene,
                              partial[i] if p_per_g else partial,
                              direction[i] if d_per_g else direction,
@@ -3205,7 +3390,10 @@ def recover_dynamics_chrom(adata_rna,
                              gamma[i] if isinstance(gamma, (list, np.ndarray))
                              else gamma,
                              t_sw[i] if isinstance(t_sw, (list, np.ndarray))
-                             else t_sw)
+                             else t_sw,
+                             settings.VERBOSITY,
+                             settings.LOG_FOLDER,
+                            settings.LOG_FILENAME)
             switch, rate, scale_cc, rescale_c, rescale_u, realign_ratio = \
                 parameters
             likelihood, l_c, ssd_c, var_c = likelihood
@@ -3364,8 +3552,7 @@ def set_velocity_genes(adata,
                        gamma_upper=None,
                        gamma_lower=None,
                        scale_cc_upper=None,
-                       scale_cc_lower=None,
-                       verbose=False
+                       scale_cc_lower=None
                        ):
     """Reset velocity genes.
 
@@ -3413,8 +3600,6 @@ def set_velocity_genes(adata,
         Maximum scale_cc.
     scale_cc_lower: `float` (default: `None`)
         Minimum scale_cc.
-    verbose: `bool` (default: `False`)
-        Whether to print the number of velocity genes.
 
     Returns
     -------
@@ -3464,8 +3649,7 @@ def set_velocity_genes(adata,
         v_genes &= adata.var['fit_scale_cc'] <= scale_cc_upper
     if scale_cc_lower is not None:
         v_genes &= adata.var['fit_scale_cc'] >= scale_cc_lower
-    if verbose:
-        print(f'{np.sum(v_genes)} velocity genes were selected')
+    logg.update(f'{np.sum(v_genes)} velocity genes were selected', v=1)
     adata.var['velo_s_genes'] = adata.var['velo_u_genes'] = \
         adata.var['velo_chrom_genes'] = v_genes
 
@@ -3593,15 +3777,15 @@ def LRT_decoupling(adata_rna, adata_atac, **kwargs):
         LRT statistics
     """
     from scipy.stats.distributions import chi2
-    print('fitting models with decoupling intervals')
+    logg.update('fitting models with decoupling intervals', v=0)
     adata_result_w_decoupled = recover_dynamics_chrom(adata_rna, adata_atac,
                                                       fit_decoupling=True,
                                                       **kwargs)
-    print('fitting models without decoupling intervals')
+    logg.update('fitting models without decoupling intervals', v=0)
     adata_result_wo_decoupled = recover_dynamics_chrom(adata_rna, adata_atac,
                                                        fit_decoupling=False,
                                                        **kwargs)
-    print('testing likelihood ratio')
+    logg.update('testing likelihood ratio', v=0)
     shared_genes = pd.Index(np.intersect1d(adata_result_w_decoupled.var_names,
                                            adata_result_wo_decoupled.var_names)
                             )
@@ -3949,7 +4133,7 @@ def dynamic_plot(adata,
     genes = np.array(genes)
     missing_genes = genes[~np.isin(genes, adata.var_names)]
     if len(missing_genes) > 0:
-        print(f'{missing_genes} not found')
+        logg.update(f'{missing_genes} not found', v=0)
     genes = genes[np.isin(genes, adata.var_names)]
     gn = len(genes)
     if gn == 0:
@@ -4244,7 +4428,7 @@ def scatter_plot(adata,
     genes = np.array(genes)
     missing_genes = genes[~np.isin(genes, adata.var_names)]
     if len(missing_genes) > 0:
-        print(f'{missing_genes} not found')
+        logg.update(f'{missing_genes} not found', v=0)
     genes = genes[np.isin(genes, adata.var_names)]
     gn = len(genes)
     if gn == 0:
