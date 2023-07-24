@@ -27,8 +27,7 @@ def result_data_2():
     # aggregate peaks
     adata_atac = a.aggregate_peaks_10x(adata_atac,
                                        'test_files/peak_annotation.tsv',
-                                       'test_files/feature_linkage.bedpe',
-                                       verbose=False)
+                                       'test_files/feature_linkage.bedpe')
 
     return adata_atac
 
