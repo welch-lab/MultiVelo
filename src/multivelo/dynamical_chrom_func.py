@@ -18,8 +18,8 @@ from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 import math
 
-import mv_logging as logg
-import settings
+from multivelo import mv_logging as logg
+from multivelo import settings
 
 
 def check_params(alpha_c,

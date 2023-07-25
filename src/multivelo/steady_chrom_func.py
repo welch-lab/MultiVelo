@@ -8,8 +8,8 @@ import pandas as pd
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 
-import mv_logging as logg
-import settings
+from multivelo import mv_logging as logg
+from multivelo import settings
 
 
 class ChromatinVelocity:

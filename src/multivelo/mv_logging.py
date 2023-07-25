@@ -1,4 +1,4 @@
-import settings
+from multivelo import settings
 import os
 from numba import jit
 
