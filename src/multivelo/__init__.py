@@ -31,5 +31,11 @@ from .steady_chrom_func import (
     velocity_chrom
 )
 
+from .mv_logging import (
+    update,
+    warn,
+    error
+)
+
 from importlib.metadata import version
 __version__ = version(__name__)
