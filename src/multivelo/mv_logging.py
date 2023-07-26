@@ -1,5 +1,11 @@
-from multivelo import settings
 import os
+import sys
+
+current_path = os.path.dirname(__file__)
+src_path = os.path.join(current_path, "..")
+sys.path.append(src_path)
+
+from multivelo import settings
 from numba import jit
 
 msg_codes = {1: "update", 2: "warning", 3: "error"}

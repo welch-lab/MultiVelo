@@ -11,6 +11,10 @@ import scipy
 import os
 import sys
 
+current_path = os.path.dirname(__file__)
+src_path = os.path.join(current_path, "..")
+sys.path.append(src_path)
+
 from multivelo import mv_logging as logg
 from multivelo import settings
 

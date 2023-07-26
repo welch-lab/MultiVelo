@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 import numpy as np
 from scipy import sparse
@@ -7,6 +8,10 @@ from scanpy import Neighbors
 import pandas as pd
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
+
+current_path = os.path.dirname(__file__)
+src_path = os.path.join(current_path, "..")
+sys.path.append(src_path)
 
 from multivelo import mv_logging as logg
 from multivelo import settings

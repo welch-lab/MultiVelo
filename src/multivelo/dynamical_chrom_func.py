@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
@@ -17,6 +18,10 @@ from numba.typed import List
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 import math
+
+current_path = os.path.dirname(__file__)
+src_path = os.path.join(current_path, "..")
+sys.path.append(src_path)
 
 from multivelo import mv_logging as logg
 from multivelo import settings

@@ -2,12 +2,12 @@ import os
 import sys
 
 current_path = os.path.dirname(__file__)
-src_path = os.path.join(current_path, "../src/multivelo")
+src_path = os.path.join(current_path, "..")
 sys.path.append(src_path)
 
 import pytest
 import numpy as np
-import dynamical_chrom_func as dcf
+import multivelo as mv
 import scanpy as sc
 import scvelo as scv
 import sys
@@ -35,7 +35,7 @@ def result_data_4():
     gene_list = ["Shh", "Heg1", "Cux1", "Lef1"]
 
     # run our first function to test (recover_dynamics_chrom)
-    adata_result = dcf.recover_dynamics_chrom(adata_rna,
+    adata_result = mv.recover_dynamics_chrom(adata_rna,
                                              adata_atac,
                                              gene_list=gene_list,
                                              max_iter=5,
@@ -82,9 +82,9 @@ def test_gamma(result_data_4):
 
 def test_embedding_stream(result_data_4):
 
-    dcf.velocity_graph(result_data_4)
+    mv.velocity_graph(result_data_4)
 
-    ax = dcf.velocity_embedding_stream(result_data_4, basis='umap',
+    ax = mv.velocity_embedding_stream(result_data_4, basis='umap',
                                       color='celltype', show=False)
 
     assert ax is not None
@@ -104,8 +104,8 @@ def test_embedding_stream(result_data_4):
 # tests the latent_time function
 def test_latent_time(result_data_4):
 
-    dcf.velocity_graph(result_data_4)
-    dcf.latent_time(result_data_4)
+    mv.velocity_graph(result_data_4)
+    mv.latent_time(result_data_4)
 
     latent_time = result_data_4.obs["latent_time"]
 
@@ -115,7 +115,7 @@ def test_latent_time(result_data_4):
 # test the velocity_graph function
 def test_velo_graph(result_data_4):
 
-    dcf.velocity_graph(result_data_4)
+    mv.velocity_graph(result_data_4)
 
     digits = 8
 
@@ -156,7 +156,7 @@ def lrt_compute():
     gene_list = ["Shh", "Heg1", "Cux1", "Lef1"]
 
     # run our first function to test (LRT_decoupling)
-    w_de, wo_de, res = dcf.LRT_decoupling(adata_rna,
+    w_de, wo_de, res = mv.LRT_decoupling(adata_rna,
                                          adata_atac,
                                          gene_list=gene_list,
                                          max_iter=5,
@@ -299,7 +299,7 @@ def lrt_res_test(lrt_compute):
     def test_qc_metrics():
         adata_rna = sc.read(rna_path)
 
-        dcf.calculate_qc_metrics(adata_rna)
+        mv.calculate_qc_metrics(adata_rna)
 
         total_unspliced = adata_rna.obs["total_unspliced"]
 
