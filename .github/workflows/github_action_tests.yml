@@ -41,4 +41,5 @@ jobs:
           src/multivelo/steady_chrom_func.py
       - name: Test with pytest
         run: |
+          pip3 install -e .
           pytest
