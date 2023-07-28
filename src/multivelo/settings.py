@@ -3,26 +3,21 @@ import os
 """Settings
 """
 
+# the desired verbosity
 global VERBOSITY
 
 # cwd: The current working directory
 global CWD
 
+# the name of the file to which we're writing the log files
 global LOG_FOLDER
 
+# the name of the file to which we're writing the logs
+# (If left to the default value of None, we don't write to a file)
 global LOG_FILENAME
 
+# the name of the gene the code is processing
 global GENE
-
-# if os.path.isfile("settings.txt"):
-#     with open("settings.txt", "r") as sfile:
-#         VERBOSITY = int(sfile.readline())
-
-#         # get substrings from the file to avoid including newlines
-#         CWD = sfile.readline()[:-1]
-#         LOG_FOLDER = sfile.readline()[:-1]
-#         LOG_FILENAME = sfile.readline()[:-1]
-# else:
 
 VERBOSITY = 1
 CWD = os.path.abspath(os.getcwd())
