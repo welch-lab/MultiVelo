@@ -553,8 +553,8 @@ def ellipse_fit(adata,
     gn = len(genes)
     if gn < n_cols:
         n_cols = gn
-    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, figsize=(2 * n_cols,
-                            2.4 * (-(-gn // n_cols)))
+    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, squeeze=False,
+                            figsize=(2 * n_cols, 2.4 * (-(-gn // n_cols)))
                             if figsize is None else figsize)
     count = 0
     for gene in genes:
