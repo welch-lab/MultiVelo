@@ -24,6 +24,101 @@ sys.path.append(current_path)
 
 from pyWNN import pyWNN
 
+def do_count(fastqs, input_loc, output_loc, whitelist_path=None, tech="10XV3", strand=None, threads=8, memory=4):
+
+    """Get spliced and unspliced counts from fastq data.
+
+    Makes use of the kallisto-bustools count function:
+    https://www.kallistobus.tools/kb_usage/kb_count/
+    kb-python.readthedocs.io/en/latest/autoapi/kb_python/count/index.html
+
+    Parameters
+    ----------
+    fastqs: `List[str]`
+        The file locations of the fastqs to process.
+    input_loc: `str`
+        The folder location of the reference files.
+        The folder should contain an index file with the name "index.idx", a 
+        transcripts-to-gene file with the name "t2g.txt", a cDNA 
+        transcripts-to-capture file with the name "cdna_t2c.txt", and an
+        intron transcripts-to-captured file with the name intron_t2c.txt.
+    output_loc: `str`
+        The desired folder location of the output of the function.
+    whitelist_path: `str` (default: `None`)
+        Path to a barcode whitelist to use to replace the selected technology's
+        whitelist.
+    tech: `str` (default: `10XV3`)
+        The technology used to collect the single-cell data. 
+    strand: `str` (default: `None`)
+        The strandedness desired to process the data.
+    threads: `int`
+        The number of threads to use for parallel processing.
+    memory: `int`
+        Maximum memory (in GB) to use while processing.
+
+    Returns
+    -------
+    adata_count: :class:`~anndata.AnnData`
+        An AnnData object containing all the spliced and unspliced counts,
+        as well as associated gene names.
+
+    """
+
+    # convert the number of threads and the amount of allocated memory
+    # into correctly-formatted strings for running kb count
+    thread_string = str(threads)
+    memory_string = str(memory) + "G"
+
+    # locations of important files
+    index_loc = input_loc + "/index.idx"
+    t2g_loc = input_loc + "/t2g.txt"
+    
+    cdna_t2c = input_loc + "/cdna_t2c.txt"
+    intron_t2c = input_loc + "/intron_t2c.txt"
+    
+    # keep the original argv values in case the user specifies it
+    orig_argv = sys.argv
+
+    # assemble the input array to use for kb count
+    input_array = ["count",
+                "count",
+                "-i", index_loc, "-g", t2g_loc,
+                "-x", tech,
+                "-o", output_loc,
+                "-t", thread_string, "-m", memory_string,
+                "--workflow", "lamanno",
+                "-c1", cdna_t2c,
+                "-c2", intron_t2c,
+                "--h5ad"]
+
+    # specify the stranded-ness of the run
+    if strand is not None:
+        input_array.append("--strand")
+        input_array.append(strand)
+
+    # specify the whitelist path of the run
+    if whitelist_path is not None:
+        input_array.append("-w")
+        input_array.append(whitelist_path)
+
+    # add the fastq's we're doing the run on
+    for fastq in fastqs:
+        input_array.append(fastq)
+
+    # use our assembled input array as the parameters for kb count
+    sys.argv = input_array
+
+    # run kb count
+    kbm.main()
+    
+    # set argv back to its original value
+    sys.argv = orig_argv
+
+    # get the anndata object for 
+    path = output_loc + "/counts_unfiltered"
+    adata_count = sc.read(path + "/adata.h5ad")
+
+    return adata_count
 
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
                         peak_dist=10000, min_corr=0.5, gene_body=False,
