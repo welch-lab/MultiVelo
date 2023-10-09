@@ -1,7 +1,9 @@
 # MultiVelo Seurat WNN Demo
 # The procedure mostly follows Seurat tutorial: https://satijalab.org/seurat/articles/weighted_nearest_neighbor_analysis.html
-# Note that we do not claim these preprocessing steps to be the best, as there aren't any. Feel free to make any changes you deem necessary.
-# Please use libblas 3.9.1 and liblapack 3.9.1 for reproducing the 10X mouse brain demo, or use supplied WNN files on GitHub.
+# Note that these preprocessing steps are what we found to be the best for the 10X mouse brain demo. These steps may need to be modified for some datasets to give the best performance.
+# For example, we have found that regressing out cell cycle is helpful in some cases.
+# We used libblas 3.9.1 and liblapack 3.9.1 to generate the results in the paper. The visualizations differ slightly if you use a different version.
+# To reproduce the exact results from the paper, please match the libblas and liblapack versions or use the supplied WNN files on GitHub.
 
 library(Seurat)
 library(Signac)
