@@ -10,6 +10,8 @@ from tqdm.auto import tqdm
 import scipy
 import os
 import sys
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
 
 current_path = os.path.dirname(__file__)
 src_path = os.path.join(current_path, "..")
@@ -72,10 +74,10 @@ def do_count(fastqs, input_loc, output_loc, whitelist_path=None, tech="10XV3", s
     # locations of important files
     index_loc = input_loc + "/index.idx"
     t2g_loc = input_loc + "/t2g.txt"
-    
+
     cdna_t2c = input_loc + "/cdna_t2c.txt"
     intron_t2c = input_loc + "/intron_t2c.txt"
-    
+
     # keep the original argv values in case the user specifies it
     orig_argv = sys.argv
 
@@ -110,7 +112,7 @@ def do_count(fastqs, input_loc, output_loc, whitelist_path=None, tech="10XV3", s
 
     # run kb count
     kbm.main()
-    
+
     # set argv back to its original value
     sys.argv = orig_argv
 
@@ -120,9 +122,19 @@ def do_count(fastqs, input_loc, output_loc, whitelist_path=None, tech="10XV3", s
 
     return adata_count
 
+
+def prepare_gene_mat(var_dict, peaks, gene_mat, adata_atac_X_copy, i):
+
+    for peak in peaks:
+        if peak in var_dict:
+            peak_index = var_dict[peak]
+
+            gene_mat[:, i] += adata_atac_X_copy[:, peak_index]
+
+
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
                         peak_dist=10000, min_corr=0.5, gene_body=False,
-                        return_dict=False):
+                        return_dict=False, parallel=False, n_jobs=1):
 
     """Peak to gene aggregation.
 
@@ -363,12 +375,39 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
     adata_atac_X_copy = adata_atac.X.A
     gene_mat = np.zeros((adata_atac.shape[0], len(promoter_genes)))
     var_names = adata_atac.var_names.to_numpy()
-    for i, gene in tqdm(enumerate(promoter_genes), total=len(promoter_genes)):
-        peaks = gene_dict[gene]
-        for peak in peaks:
-            if peak in var_names:
-                peak_index = np.where(var_names == peak)[0][0]
-                gene_mat[:, i] += adata_atac_X_copy[:, peak_index]
+    var_dict = {}
+
+    for i, name in enumerate(var_names):
+        var_dict.update({name: i})
+
+    # if we only want to run one job at a time, then no parallelization
+    # is necessary
+    if n_jobs == 1:
+        parallel = False
+
+    if parallel:
+        # if we want to run in parallel, modify the gene_mat variable with
+        # multiple cores, calling prepare_gene_mat with joblib.Parallel()
+        Parallel(n_jobs=n_jobs,
+                 require='sharedmem')(
+                 delayed(prepare_gene_mat)(var_dict,
+                                           gene_dict[promoter_genes[i]],
+                                           gene_mat,
+                                           adata_atac_X_copy,
+                                           i)for i in tqdm(range(
+                                               len(promoter_genes))))
+
+    else:
+        # if we aren't running in parallel, just call prepare_gene_mat
+        # from a for loop
+        for i, gene in tqdm(enumerate(promoter_genes),
+                            total=len(promoter_genes)):
+            prepare_gene_mat(var_dict,
+                             gene_dict[promoter_genes[i]],
+                             gene_mat,
+                             adata_atac_X_copy,
+                             i)
+
     gene_mat[gene_mat < 0] = 0
     gene_mat = AnnData(X=csr_matrix(gene_mat))
     gene_mat.obs_names = pd.Index(list(adata_atac.obs_names))
