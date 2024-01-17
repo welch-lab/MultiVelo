@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
         with:
-          extra_ards: --files src/multivelo/auxiliary.py src/multivelo/dynamical_chrom_func.py src/multivelo/steady_chrom_func.py
+          extra_args: --files src/multivelo/auxiliary.py src/multivelo/dynamical_chrom_func.py src/multivelo/steady_chrom_func.py src/multivelo/mv_logging.py src/multivelo/settings.py
 
   test:
     runs-on: ${{  matrix.os  }}
