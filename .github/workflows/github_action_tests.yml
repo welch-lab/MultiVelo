@@ -9,6 +9,19 @@ on:
 jobs:
   pre-commit:
     runs-on: ${{  matrix.os  }}
+    defaults:
+      run:
+        shell: bash -e {0} # -e to fail on error
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-11]
+        python: ["3.9", "3.10"]
+
+    env:
+      OS: ${{ matrix.os }}
+      
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
