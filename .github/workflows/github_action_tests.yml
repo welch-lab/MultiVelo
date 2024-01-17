@@ -21,11 +21,13 @@ jobs:
 
     env:
       OS: ${{ matrix.os }}
-      
+
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
+        with:
+          extra_ards: --files src/multivelo/auxiliary.py src/multivelo/dynamical_chrom_func.py src/multivelo/steady_chrom_func.py
 
   test:
     runs-on: ${{  matrix.os  }}
