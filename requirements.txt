@@ -17,3 +17,4 @@ joblib
 ipywidgets<=7.7.1
 pre-commit
 pytest
+jax <= 0.4.23
