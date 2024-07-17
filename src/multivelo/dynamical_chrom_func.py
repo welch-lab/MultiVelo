@@ -1138,9 +1138,9 @@ class ChromatinDynamical:
             u = u.A
         if sparse.issparse(s):
             s = s.A
-        self.c_all = np.ravel(np.array(c))
-        self.u_all = np.ravel(np.array(u))
-        self.s_all = np.ravel(np.array(s))
+        self.c_all = np.ravel(np.array(c, dtype=np.float64))
+        self.u_all = np.ravel(np.array(u, dtype=np.float64))
+        self.s_all = np.ravel(np.array(s, dtype=np.float64))
 
         # adjust offset
         self.offset_c, self.offset_u, self.offset_s = np.min(self.c_all), \
@@ -2605,10 +2605,6 @@ class ChromatinDynamical:
                     t3 = x
                     r4 = self.rates
 
-            elif len(x) == 4:
-                r4 = x
-                t3 = self.params[:3]
-
             elif len(x) == 7:
                 t3 = x[:3]
                 r4 = x[3:]
@@ -2622,6 +2618,12 @@ class ChromatinDynamical:
 
             else:
                 return
+
+        # clip to meaningful values
+        if self.fitting_flag_ and not self.adam:
+            scale_cc = np.clip(scale_cc,
+                               np.max([0.5*self.scale_cc, 0.25]),
+                               np.min([2*self.scale_cc, 4]))
 
         if not self.known_pars:
             if self.fit_decoupling:
