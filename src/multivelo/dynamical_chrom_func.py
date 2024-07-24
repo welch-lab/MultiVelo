@@ -3910,7 +3910,24 @@ def recover_dynamics_chrom(adata_rna,
         `'grid'`: grid search the best set of switch times.
         `'simple'`: simply initialize switch times to be 5, 10, and 15.
     device: `str` (default: `'cpu'`)
-        The device that pytorch tensor calculations will be run on.
+        The CUDA device that pytorch tensor calculations will be run on. Only
+        to be used with Adam.
+    adam: `bool` (default: `False`)
+        Whether MSE minimization is handled by the Adam algorithm or not. When
+        set to the default of False, function uses Nelder-Mead instead.
+    adam_lr: `float` (default: `None`)
+        The learning rate to use the Adam algorithm. If adam is False, this
+        value is ignored.
+    adam_beta1: `float` (default: `None`)
+        The beta1 parameter for the Adam algorithm. If adam is False, this
+        value is ignored.
+    adam_beta2: `float` (default: `None`)
+        The beta2 parameter for the Adam algorithm. If adam is False, this
+        value is ignored.
+    batch_size: `int` (default: `None`)
+        Speeds up performance using minibatch training. Specifies number of
+        cells to use per run of MSE when running the Adam algorithm. Ignored
+        if Adam is set to False.
     model_to_run: `int` or list of `int` (default: `None`)
         User specified models for each genes. Possible values are 1 are 2. If
         `None`, the model
