@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-11]
+        os: [windows-latest, ubuntu-latest, macos-12]
         # python: ["3.9", "3.10"]
 
     env:
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-11]
+        os: [windows-latest, ubuntu-latest, macos-12]
         python: ["3.9", "3.10"]
 
     env:
