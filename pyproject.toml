@@ -3,7 +3,13 @@ requires = ['setuptools>=45', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [tool.black]
-include = '\.pyi?$'
+# include = '\.pyi?$'
+include = '''
+/(
+    \.py
+  | \.pt
+)/
+'''
 exclude = '''
 /(
     \.eggs

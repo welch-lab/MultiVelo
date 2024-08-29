@@ -3,6 +3,7 @@ from multivelo import settings
 
 import os
 import sys
+import pathlib
 import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
@@ -23,6 +24,7 @@ from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 import math
 import torch
+from torch import nn
 
 current_path = os.path.dirname(__file__)
 src_path = os.path.join(current_path, "..")
@@ -970,6 +972,413 @@ def calculate_dist_and_time(c, u, s,
     else:
         return min_dist, state_pred, max_u, max_s, t_sw_adjust
 
+def t_of_c(alpha_c, k_c, c_o, c, rescale_factor, sw_t):
+
+    coef = -float(1)/alpha_c
+
+    c_val = np.clip(c / rescale_factor, a_min=0, a_max=1)
+
+    in_log = (float(k_c) - c_val) / float((k_c) - (c_o))
+
+    epsilon = 1e-9
+
+    return_val = coef * np.log(in_log + epsilon)
+
+    if k_c == 0:
+        return_val += sw_t
+
+    return return_val
+
+def make_X(c, u, s,
+           max_u,
+           max_s,
+           alpha_c, alpha, beta, gamma,
+           gene_sw_t,
+           c0, c_sw1, c_sw2, c_sw3,
+           u0, u_sw1, u_sw2, u_sw3,
+           s0, s_sw1, s_sw2, s_sw3,
+           model, direction, state):
+
+    if direction == "complete":
+        dire = 0
+    elif direction == "on":
+        dire = 1
+    elif direction == "off":
+        dire = 2
+
+    n = c.shape[0]
+
+    epsilon = 1e-5
+
+    if dire == 0:
+        x = np.concatenate((np.array([c,
+                                      np.log(u + epsilon),
+                                      np.log(s + epsilon)]),
+                            np.full((n, 17), [np.log(alpha_c + epsilon),
+                                              np.log(alpha + epsilon),
+                                              np.log(beta + epsilon),
+                                              np.log(gamma + epsilon),
+                                              c_sw1, c_sw2, c_sw3,
+                                              np.log(u_sw2 + epsilon),
+                                              np.log(u_sw3 + epsilon),
+                                              np.log(s_sw2 + epsilon),
+                                              np.log(s_sw3 + epsilon),
+                                              np.log(max_u),
+                                              np.log(max_s),
+                                              gene_sw_t[0],
+                                              gene_sw_t[1],
+                                              gene_sw_t[2],
+                                              model]).T,
+                            np.full((n, 1), state).T
+                            )).T.astype(np.float32)
+
+    elif dire == 1:
+        x = np.concatenate((np.array([c,
+                                      np.log(u + epsilon),
+                                      np.log(s + epsilon)]),
+                            np.full((n, 12), [np.log(alpha_c + epsilon),
+                                              np.log(alpha + epsilon),
+                                              np.log(beta + epsilon),
+                                              np.log(gamma + epsilon),
+                                              c_sw1, c_sw2,
+                                              np.log(u_sw1 + epsilon),
+                                              np.log(u_sw2 + epsilon),
+                                              np.log(s_sw1 + epsilon),
+                                              np.log(s_sw2 + epsilon),
+                                              gene_sw_t[0],
+                                              model]).T,
+                            np.full((n, 1), state).T
+                            )).T.astype(np.float32)
+
+    elif dire == 2:
+        if model == 1:
+
+            max_u_t = -(float(1)/alpha_c)*np.log((max_u*beta[i]) / (alpha[i]*c0[2]))
+
+            x = np.concatenate((np.array([np.log(c + epsilon),
+                                          np.log(u + epsilon),
+                                          np.log(s + epsilon)]),
+                                np.full((n, 14), [np.log(alpha_c + epsilon),
+                                                  np.log(alpha + epsilon),
+                                                  np.log(beta + epsilon),
+                                                  np.log(gamma + epsilon),
+                                                  c_sw2, c_sw3,
+                                                  np.log(u_sw2 + epsilon),
+                                                  np.log(u_sw3 + epsilon),
+                                                  np.log(s_sw2 + epsilon),
+                                                  np.log(s_sw3 + epsilon),
+                                                  max_u_t,
+                                                  np.log(max_u),
+                                                  np.log(max_s),
+                                                  gene_sw_t[2]]).T,
+                                np.full((n, 1), state).T
+                                )).T.astype(np.float32)
+        elif model == 2:
+            x = np.concatenate((np.array([c,
+                                          np.log(u + epsilon),
+                                          np.log(s + epsilon)]),
+                                np.full((n, 12), [np.log(alpha_c + epsilon),
+                                                  np.log(alpha + epsilon),
+                                                  np.log(beta + epsilon),
+                                                  np.log(gamma + epsilon),
+                                                  c_sw2, c_sw3,
+                                                  np.log(u_sw2 + epsilon),
+                                                  np.log(u_sw3 + epsilon),
+                                                  np.log(s_sw2 + epsilon),
+                                                  np.log(s_sw3 + epsilon),
+                                                  np.log(max_u),
+                                                  gene_sw_t[2]]).T,
+                                np.full((n, 1), state).T
+                                )).T.astype(np.float32)
+
+    return x
+
+
+def calculate_dist_and_time_nn(c, u, s,
+                               max_u, max_s,
+                               t_sw_array,
+                               alpha_c, alpha, beta, gamma,
+                               rescale_c, rescale_u,
+                               ode_model_0, ode_model_1,
+                               ode_model_2_m1, ode_model_2_m2,
+                               device,
+                               scale_cc=1,
+                               scale_factor=None,
+                               model=1,
+                               conn=None,
+                               t=1000, k=1,
+                               direction='complete',
+                               total_h=20,
+                               rna_only=False,
+                               penalize_gap=True,
+                               all_cells=True):
+
+    rescale_factor = np.array([rescale_c, rescale_u, 1.0])
+
+    exp_list_net, exp_sw_list_net = generate_exp(None,
+                                                 t_sw_array,
+                                                 alpha_c,
+                                                 alpha,
+                                                 beta,
+                                                 gamma,
+                                                 model=model,
+                                                 scale_cc=scale_cc,
+                                                 rna_only=rna_only)
+
+    N = len(c)
+    N_list = np.arange(N)
+
+    if scale_factor is None:
+        cur_scale_factor = np.array([np.std(c),
+                                     np.std(u),
+                                     np.std(s)])
+    else:
+        cur_scale_factor = scale_factor
+
+    t_pred_per_state = []
+    dists_per_state = []
+
+    dire = 0
+
+    if direction == "on":
+        states = [0, 1]
+        dire = 1
+
+    elif direction == "off":
+        states = [2, 3]
+        dire = 2
+
+    else:
+        states = [0, 1, 2, 3]
+        dire = 0
+
+    dists_per_state = np.zeros((N, len(states)))
+    t_pred_per_state = np.zeros((N, len(states)))
+    u_pred_per_state = np.zeros((N, len(states)))
+    s_pred_per_state = np.zeros((N, len(states)))
+
+    increment = 0
+
+    # determine when we can consider u and s close to zero
+    zero_us = np.logical_and((u < 0.1 * max_u), (s < 0.1 * max_s))
+
+    t_pred = np.zeros(N)
+    dists = None
+
+    # pass all the data through the neural net as each valid state
+    for state in states:
+
+        # when u and s = 0, it's better to use the inverse c equation
+        # instead of the neural network, which happens for part of
+        # state 3 and all of state 0
+        inverse_c = np.logical_or(state == 0,
+                                  np.logical_and(state == 3, zero_us))
+
+        not_inverse_c = np.logical_not(inverse_c)
+
+        # if we want to use the inverse c equation...
+        if np.any(inverse_c):
+
+            # find out at what switch time chromatin closes
+            c_sw_t = t_sw_array[int(model)]
+
+            # figure out whether chromatin is opening/closing and what
+            # the initial c value is
+            if state <= model:
+                k_c = 1
+                c_0_for_t_guess = 0
+            elif state > model:
+                k_c = 0
+                c_0_for_t_guess = exp_sw_list_net[int(model)][0, 0]
+
+            # calculate predicted time from the inverse c equation
+            t_pred[inverse_c] = t_of_c(alpha_c,
+                                       k_c, c_0_for_t_guess,
+                                       c[inverse_c],
+                                       rescale_factor[0],
+                                       c_sw_t)
+
+        # if there are points where we want to use the neural network...
+        if np.any(not_inverse_c):
+
+            # create an input matrix from the data
+            x = make_X(c[not_inverse_c] / rescale_factor[0],
+                       u[not_inverse_c] / rescale_factor[1],
+                       s[not_inverse_c] / rescale_factor[2],
+                       max_u,
+                       max_s,
+                       alpha_c*(scale_cc if state > model else 1),
+                       alpha, beta, gamma,
+                       t_sw_array,
+                       0,
+                       exp_sw_list_net[0][0, 0],
+                       exp_sw_list_net[1][0, 0],
+                       exp_sw_list_net[2][0, 0],
+                       0,
+                       exp_sw_list_net[0][0, 1],
+                       exp_sw_list_net[1][0, 1],
+                       exp_sw_list_net[2][0, 1],
+                       0,
+                       exp_sw_list_net[0][0, 2],
+                       exp_sw_list_net[1][0, 2],
+                       exp_sw_list_net[2][0, 2],
+                       model, direction, state)
+
+            # do a forward pass
+            if dire == 0:
+                t_pred_ten = ode_model_0(torch.tensor(x,
+                                                      dtype=torch.float,
+                                                      device=device)
+                                         .reshape(-1, x.shape[1]))
+
+            elif dire == 1:
+                t_pred_ten = ode_model_1(torch.tensor(x,
+                                                      dtype=torch.float,
+                                                      device=device)
+                                         .reshape(-1, x.shape[1]))
+
+            elif dire == 2:
+                if model == 1:
+                    t_pred_ten = ode_model_2_m1(torch.tensor(x,
+                                                             dtype=torch.float,
+                                                             device=device)
+                                                .reshape(-1, x.shape[1]))
+                elif model == 2:
+                    t_pred_ten = ode_model_2_m2(torch.tensor(x,
+                                                             dtype=torch.float,
+                                                             device=device)
+                                                .reshape(-1, x.shape[1]))
+
+            # make a numpy array out of our tensor of predicted time points
+            t_pred[not_inverse_c] = (t_pred_ten.cpu().detach().numpy()
+                                     .flatten()*21) - 1
+
+        # calculate tau values from our predicted time points
+        if state == 0:
+            t_pred = np.clip(t_pred, a_min=0, a_max=t_sw_array[0])
+            tau1 = t_pred
+            tau2 = []
+            tau3 = []
+            tau4 = []
+        elif state == 1:
+            tau1 = []
+            t_pred = np.clip(t_pred, a_min=t_sw_array[0], a_max=t_sw_array[1])
+            tau2 = t_pred - t_sw_array[0]
+            tau3 = []
+            tau4 = []
+        elif state == 2:
+            tau1 = []
+            tau2 = []
+            t_pred = np.clip(t_pred, a_min=t_sw_array[1], a_max=t_sw_array[2])
+            tau3 = t_pred - t_sw_array[1]
+            tau4 = []
+        elif state == 3:
+            tau1 = []
+            tau2 = []
+            tau3 = []
+            t_pred = np.clip(t_pred, a_min=t_sw_array[2], a_max=20)
+            tau4 = t_pred - t_sw_array[2]
+
+        tau_list = [tau1, tau2, tau3, tau4]
+
+        valid_vals = []
+
+        for i in range(len(tau_list)):
+            if len(tau_list[i]) == 0:
+                tau_list[i] = np.array([0.0])
+            else:
+                valid_vals.append(i)
+
+        # take the time points and get predicted c/u/s values from them
+        exp_list, exp_sw_list_2 = generate_exp(tau_list,
+                                               t_sw_array,
+                                               alpha_c,
+                                               alpha,
+                                               beta,
+                                               gamma,
+                                               model=model,
+                                               scale_cc=scale_cc,
+                                               rna_only=rna_only)
+
+        pred_c = np.concatenate([exp_list[x][:, 0] * rescale_factor[0]
+                                 for x in valid_vals])
+        pred_u = np.concatenate([exp_list[x][:, 1] * rescale_factor[1]
+                                 for x in valid_vals])
+        pred_s = np.concatenate([exp_list[x][:, 2] * rescale_factor[2]
+                                 for x in valid_vals])
+
+        # calculate distance between predicted and real values
+        c_diff = (c - pred_c) / cur_scale_factor[0]
+        u_diff = (u - pred_u) / cur_scale_factor[1]
+        s_diff = (s - pred_s) / cur_scale_factor[2]
+
+        dists = (c_diff*c_diff) + (u_diff*u_diff) + (s_diff*s_diff)
+
+        if conn is not None:
+            dists = conn.dot(dists)
+
+        # store the distances, times, and predicted u and s values for
+        # each state
+        dists_per_state[:, increment] = dists
+        t_pred_per_state[:, increment] = t_pred
+        u_pred_per_state[:, increment] = pred_u
+        s_pred_per_state[:, increment] = pred_s
+
+        increment += 1
+
+    # whichever state has the smallest distance for a given data point
+    # is our predicted state
+    state_pred = np.argmin(dists_per_state, axis=1)
+
+    # slice dists and predicted time over the correct state
+    dists = dists_per_state[N_list, state_pred]
+    t_pred = t_pred_per_state[N_list, state_pred]
+
+    max_t = t_pred.max()
+    min_t = t_pred.min()
+
+    penalty = 0
+
+    # for induction and complete genes, add a penalty to ensure that not
+    # all points are in state 0
+    if direction == "on" or direction == "complete":
+
+        if t_sw_array[0] >= max_t:
+            penalty += (t_sw_array[0] - max_t) + 10
+
+    # for induction genes, add a penalty to ensure that predicted time
+    # points are not "out of bounds" by being greater than the
+    # second switch time
+    if direction == "on":
+
+        if min_t > t_sw_array[1]:
+            penalty += (min_t - t_sw_array[1]) + 10
+
+    # for repression genes, add a penalty to ensure that predicted time
+    # points are not "out of bounds" by being smaller than the
+    # second switch time
+    if direction == "off":
+
+        if t_sw_array[1] >= max_t:
+            penalty += (t_sw_array[1] - max_t) + 10
+
+    # add penalty to ensure that the time points aren't concentrated to
+    # one spot
+    if np.abs(max_t - min_t) <= 1e-2:
+        penalty += np.abs(max_t - min_t) + 10
+
+    # because the indices chosen by np.argmin are just indices,
+    # we need to increment by two to get the true state number for
+    # our "off" genes (e.g. so that they're in the domain of [2,3] instead
+    # of [0,1])
+    if direction == "off":
+        state_pred += 2
+
+    if all_cells:
+        return dists, t_pred, state_pred, max_u, max_s, penalty
+    else:
+        return dists, state_pred, max_u, max_s, penalty
+
 
 # @jit(nopython=True, fastmath=True)
 def compute_likelihood(c, u, s,
@@ -1067,6 +1476,7 @@ class ChromatinDynamical:
                  max_iter=10,
                  init_mode="grid",
                  device="cpu",
+                 neural_net=False,
                  adam=False,
                  adam_lr=None,
                  adam_beta1=None,
@@ -1096,6 +1506,8 @@ class ChromatinDynamical:
         self.local_std = local_std
         self.conn = connectivities
 
+        self.neural_net = neural_net
+    
         self.adam = adam
         self.adam_lr = adam_lr
         self.adam_beta1 = adam_beta1
@@ -1175,6 +1587,18 @@ class ChromatinDynamical:
             self.low_quality = True
         self.scale_c, self.scale_u, self.scale_s = np.max(self.c_all) \
             if not self.rna_only else 1.0, self.std_u/self.std_s, 1.0
+
+        # if we're on neural net mode, check to see if c is way bigger than
+        # u or s, which would be very hard for the neural net to fit
+        if not self.low_quality and neural_net:
+            max_c_orig = np.max(self.c)
+            if max_c_orig / np.max(self.u) > 500:
+                self.low_quality = True
+
+            if not self.low_quality:
+                if max_c_orig / np.max(self.s) > 500:
+                    self.low_quality = True
+
         self.c_all /= self.scale_c
         self.u_all /= self.scale_u
         self.s_all /= self.scale_s
@@ -1185,6 +1609,7 @@ class ChromatinDynamical:
                                       self.weight_c, 1.0, 1.0])
         self.scale_factor[0] = 1 if self.rna_only else self.scale_factor[0]
         self.max_u, self.max_s = np.max(self.u), np.max(self.s)
+        self.max_u_all, self.max_s_all = np.max(self.u_all), np.max(self.s_all)
         if self.conn is not None:
             self.conn_sub = self.conn[np.ix_(self.non_zero & self.non_outlier,
                                              self.non_zero & self.non_outlier)]
@@ -1200,6 +1625,65 @@ class ChromatinDynamical:
             logg.update(f'known parameters for gene {self.gene} are '
                         f'scaling={rescale_u}, alpha={alpha}, beta={beta},'
                         f' gamma={gamma}, t_={t_}.', v=1)
+
+        # define neural networks
+        self.ode_model_0 = nn.Sequential(
+            nn.Linear(21, 150),
+            nn.ReLU(),
+            nn.Linear(150, 112),
+            nn.ReLU(),
+            nn.Linear(112, 75),
+            nn.ReLU(),
+            nn.Linear(75, 1),
+            nn.Sigmoid()
+        )
+
+        self.ode_model_1 = nn.Sequential(
+            nn.Linear(16, 64),
+            nn.ReLU(),
+            nn.Linear(64, 48),
+            nn.ReLU(),
+            nn.Linear(48, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1),
+            nn.Sigmoid()
+        )
+
+        self.ode_model_2_m1 = nn.Sequential(
+            nn.Linear(18, 220),
+            nn.ReLU(),
+            nn.Linear(220, 165),
+            nn.ReLU(),
+            nn.Linear(165, 110),
+            nn.ReLU(),
+            nn.Linear(110, 1),
+            nn.Sigmoid()
+        )
+
+        self.ode_model_2_m2 = nn.Sequential(
+            nn.Linear(16, 150),
+            nn.ReLU(),
+            nn.Linear(150, 112),
+            nn.ReLU(),
+            nn.Linear(112, 75),
+            nn.ReLU(),
+            nn.Linear(75, 1),
+            nn.Sigmoid()
+        )
+
+        self.ode_model_0.to(torch.device(self.device))
+        self.ode_model_1.to(torch.device(self.device))
+        self.ode_model_2_m1.to(torch.device(self.device))
+        self.ode_model_2_m2.to(torch.device(self.device))
+
+        # load in neural network
+        net_path = os.path.dirname(os.path.abspath(__file__)) + \
+            "/neural_nets/"
+
+        self.ode_model_0.load_state_dict(torch.load(net_path+"dir0.pt"))
+        self.ode_model_1.load_state_dict(torch.load(net_path+"dir1.pt"))
+        self.ode_model_2_m1.load_state_dict(torch.load(net_path+"dir2_m1.pt"))
+        self.ode_model_2_m2.load_state_dict(torch.load(net_path+"dir2_m2.pt"))
 
         # 4 rate parameters
         self.alpha_c = 0.1
@@ -3125,34 +3609,76 @@ class ChromatinDynamical:
         u_array = self.u_all if fit_outlier else self.u
         s_array = self.s_all if fit_outlier else self.s
 
-        # distances and time assignments
-        res = calculate_dist_and_time(c_array,
-                                      u_array,
-                                      s_array,
-                                      t_sw_array,
-                                      r4[0],
-                                      r4[1],
-                                      r4[2],
-                                      r4[3],
-                                      rescale_c,
-                                      rescale_u,
-                                      scale_cc=scale_cc,
-                                      scale_factor=self.scale_factor,
-                                      model=self.model,
-                                      direction=self.direction,
-                                      conn=self.conn if fit_outlier
-                                      else self.conn_sub,
-                                      k=self.k_dist,
-                                      t=self.n_anchors,
-                                      rna_only=self.rna_only,
-                                      penalize_gap=penalize_gap,
-                                      all_cells=fit_outlier)
+        if self.neural_net:
 
-        if fit_outlier:
-            min_dist, t_pred, state_pred, reach_ss, late_phase, max_u, max_s, \
-                self.anchor_t1_list, self.anchor_t2_list = res
+            res = calculate_dist_and_time_nn(c_array,
+                                             u_array,
+                                             s_array,
+                                             self.max_u_all if fit_outlier else self.max_u,
+                                             self.max_s_all if fit_outlier else self.max_s,
+                                             t_sw_array,
+                                             r4[0],
+                                             r4[1],
+                                             r4[2],
+                                             r4[3],
+                                             rescale_c,
+                                             rescale_u,
+                                             self.ode_model_0,
+                                             self.ode_model_1,
+                                             self.ode_model_2_m1,
+                                             self.ode_model_2_m2,
+                                             self.device,
+                                             scale_cc=scale_cc,
+                                             scale_factor=self.scale_factor,
+                                             model=self.model,
+                                             direction=self.direction,
+                                             conn=self.conn if fit_outlier
+                                             else self.conn_sub,
+                                             k=self.k_dist,
+                                             t=self.n_anchors,
+                                             rna_only=self.rna_only,
+                                             penalize_gap=penalize_gap,
+                                             all_cells=fit_outlier)
+
+            if fit_outlier:
+                min_dist, t_pred, state_pred, max_u, max_s, nn_penalty = res
+            else:
+                min_dist, state_pred, max_u, max_s, nn_penalty = res
+
+            penalty += nn_penalty
+
+            t_sw_adjust = [0, 0, 0]
+
         else:
-            min_dist, state_pred, max_u, max_s, t_sw_adjust = res
+
+            # distances and time assignments
+            res = calculate_dist_and_time(c_array,
+                                          u_array,
+                                          s_array,
+                                          t_sw_array,
+                                          r4[0],
+                                          r4[1],
+                                          r4[2],
+                                          r4[3],
+                                          rescale_c,
+                                          rescale_u,
+                                          scale_cc=scale_cc,
+                                          scale_factor=self.scale_factor,
+                                          model=self.model,
+                                          direction=self.direction,
+                                          conn=self.conn if fit_outlier
+                                          else self.conn_sub,
+                                          k=self.k_dist,
+                                          t=self.n_anchors,
+                                          rna_only=self.rna_only,
+                                          penalize_gap=penalize_gap,
+                                          all_cells=fit_outlier)
+
+            if fit_outlier:
+                min_dist, t_pred, state_pred, reach_ss, late_phase, max_u, \
+                    max_s, self.anchor_t1_list, self.anchor_t2_list = res
+            else:
+                min_dist, state_pred, max_u, max_s, t_sw_adjust = res
 
         loss = np.mean(min_dist)
 
@@ -3695,7 +4221,7 @@ class ChromatinDynamical:
             self.anchor_velo_min_idx, self.anchor_velo_max_idx
 
 
-def regress_func(c, u, s, m, mi, im, dev, ad, lr, b1, b2, bs, gpdist, embed,
+def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist, embed,
                  conn, pl, sp, pdir, fa, gene, pa, di, ro, fit, fd, extra, ru,
                  alpha, beta, gamma, t_, verbosity, log_folder, log_filename):
 
@@ -3742,6 +4268,7 @@ def regress_func(c, u, s, m, mi, im, dev, ad, lr, b1, b2, bs, gpdist, embed,
                              max_iter=mi,
                              init_mode=im,
                              device=dev,
+                             neural_net=nn,
                              adam=ad,
                              adam_lr=lr,
                              adam_beta1=b1,
@@ -3788,6 +4315,7 @@ def multimodel_helper(c, u, s,
                       max_iter,
                       init_mode,
                       device,
+                      neural_net,
                       adam,
                       adam_lr,
                       adam_beta1,
@@ -3820,8 +4348,8 @@ def multimodel_helper(c, u, s,
     for model in model_to_run:
         (loss_m, _, direction_, parameters, initial_exp,
          time, state, velocity, likelihood, anchors) = \
-         regress_func(c, u, s, model, max_iter, init_mode, device, adam,
-                      adam_lr, adam_beta1, adam_beta2, batch_size,
+         regress_func(c, u, s, model, max_iter, init_mode, device, neural_net,
+                      adam, adam_lr, adam_beta1, adam_beta2, batch_size,
                       global_pdist, embed_coord, conn, plot, save_plot,
                       plot_dir, fit_args, gene, partial, direction, rna_only,
                       fit, fit_decoupling, extra_color, rescale_u, alpha, beta,
@@ -3854,6 +4382,7 @@ def recover_dynamics_chrom(adata_rna,
                            max_iter=5,
                            init_mode='invert',
                            device="cpu",
+                           neural_net=False,
                            adam=False,
                            adam_lr=None,
                            adam_beta1=None,
@@ -3911,7 +4440,12 @@ def recover_dynamics_chrom(adata_rna,
         `'simple'`: simply initialize switch times to be 5, 10, and 15.
     device: `str` (default: `'cpu'`)
         The CUDA device that pytorch tensor calculations will be run on. Only
-        to be used with Adam.
+        to be used with Adam or Neural Network mode.
+    neural_net: `bool` (default: `False`)
+        Whether to run time predictions with a neural network or not. Shortens
+        runtime at the expense of accuracy. If False, uses the usual method of
+        assigning each data point to an anchor time point as outlined in the
+        Multivelo paper.
     adam: `bool` (default: `False`)
         Whether MSE minimization is handled by the Adam algorithm or not. When
         set to the default of False, function uses Nelder-Mead instead.
@@ -4078,9 +4612,18 @@ def recover_dynamics_chrom(adata_rna,
     fit_args['fig_size'] = list(fig_size)
     fit_args['point_size'] = point_size
 
+    if adam and neural_net:
+        raise Exception("ADAM and Neural Net mode can not be run concurently."
+                        " Please choose one to run on.")
+
+    if not adam and not neural_net and not device == "cpu":
+        raise Exception("Multivelo only uses non-CPU devices for Adam or"
+                        " Neural Network mode. Please use one of those or"
+                        "set the device to \"cpu\"")
+
     if adam and not device[0:5] == "cuda:":
-        raise Exception("ADAM is only possible on a cuda device. Please try"
-                        "again.")
+        raise Exception("ADAM and Neural Net mode are only possible on a cuda "
+                        "device. Please try again.")
     if not adam and batch_size is not None:
         raise Exception("Batch training is for ADAM only, please set "
                         "batch_size to None")
@@ -4350,6 +4893,7 @@ def recover_dynamics_chrom(adata_rna,
                     max_iter,
                     init_mode,
                     device,
+                    neural_net,
                     adam,
                     adam_lr,
                     adam_beta1,
@@ -4436,6 +4980,7 @@ def recover_dynamics_chrom(adata_rna,
                              model_to_run[i] if m_per_g else model_to_run,
                              max_iter, init_mode,
                              device,
+                             neural_net,
                              adam,
                              adam_lr,
                              adam_beta1,
