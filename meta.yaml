@@ -7,7 +7,7 @@ documentation_home: https://multivelo.readthedocs.io/en/latest/api.html
 install:
   pypi: multivelo
 license: BSD-3-Clause license
-version: 0.1.3
+version: 0.1.4
 authors:
   - jw156605
   - danielee0707
