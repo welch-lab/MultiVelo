@@ -3,7 +3,6 @@ from multivelo import settings
 
 import os
 import sys
-import pathlib
 import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
@@ -29,6 +28,7 @@ from torch import nn
 current_path = os.path.dirname(__file__)
 src_path = os.path.join(current_path, "..")
 sys.path.append(src_path)
+
 
 # a funciton to check for invalid values of different parameters
 def check_params(alpha_c,
@@ -972,6 +972,7 @@ def calculate_dist_and_time(c, u, s,
     else:
         return min_dist, state_pred, max_u, max_s, t_sw_adjust
 
+
 def t_of_c(alpha_c, k_c, c_o, c, rescale_factor, sw_t):
 
     coef = -float(1)/alpha_c
@@ -988,6 +989,7 @@ def t_of_c(alpha_c, k_c, c_o, c, rescale_factor, sw_t):
         return_val += sw_t
 
     return return_val
+
 
 def make_X(c, u, s,
            max_u,
@@ -1053,7 +1055,8 @@ def make_X(c, u, s,
     elif dire == 2:
         if model == 1:
 
-            max_u_t = -(float(1)/alpha_c)*np.log((max_u*beta[i]) / (alpha[i]*c0[2]))
+            max_u_t = -(float(1)/alpha_c)*np.log((max_u*beta)
+                                                 / (alpha*c0[2]))
 
             x = np.concatenate((np.array([np.log(c + epsilon),
                                           np.log(u + epsilon),
@@ -1507,7 +1510,6 @@ class ChromatinDynamical:
         self.conn = connectivities
 
         self.neural_net = neural_net
-    
         self.adam = adam
         self.adam_lr = adam_lr
         self.adam_beta1 = adam_beta1
@@ -3614,8 +3616,10 @@ class ChromatinDynamical:
             res = calculate_dist_and_time_nn(c_array,
                                              u_array,
                                              s_array,
-                                             self.max_u_all if fit_outlier else self.max_u,
-                                             self.max_s_all if fit_outlier else self.max_s,
+                                             self.max_u_all if fit_outlier
+                                             else self.max_u,
+                                             self.max_s_all if fit_outlier
+                                             else self.max_s,
                                              t_sw_array,
                                              r4[0],
                                              r4[1],
@@ -4221,9 +4225,10 @@ class ChromatinDynamical:
             self.anchor_velo_min_idx, self.anchor_velo_max_idx
 
 
-def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist, embed,
-                 conn, pl, sp, pdir, fa, gene, pa, di, ro, fit, fd, extra, ru,
-                 alpha, beta, gamma, t_, verbosity, log_folder, log_filename):
+def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist,
+                 embed, conn, pl, sp, pdir, fa, gene, pa, di, ro, fit, fd,
+                 extra, ru, alpha, beta, gamma, t_, verbosity, log_folder,
+                 log_filename):
 
     settings.VERBOSITY = verbosity
     settings.LOG_FOLDER = log_folder
