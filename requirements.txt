@@ -1,20 +1,20 @@
 typing_extensions
 anndata>=0.7.5
 scanpy>=1.5
-scvelo>=0.2.3
+scvelo>=0.2.5
 loompy>=2.0.12
-umap-learn>=0.3.10
+umap-learn>=0.5.5
 h5py>=2.10.0
 numba>=0.41.0
 numpy<=1.23.5
-scipy>=1.4.1,<=1.13.1
-pandas<=1.4.4
+scipy>=1.4.1
+pandas<=1.4.4,>=0.23,!=1.4.0
 scikit-learn>=0.23.0
 matplotlib>=3.3.0,<3.8.0
 seaborn>=0.11.0
 tqdm
 joblib
-ipywidgets<=7.7.1
+ipywidgets<=8.1.0
 pre-commit
 pytest
 jax <= 0.4.23
