@@ -39,6 +39,7 @@ Check out the :doc:`usage` section for further information.
    MultiVelo_Fig5
    MultiVelo_Fig6
    adam_example
+   neural_net_example
 
 
 .. |Stars| image:: https://img.shields.io/github/stars/welch-lab/multivelo?logo=GitHub&color=yellow
