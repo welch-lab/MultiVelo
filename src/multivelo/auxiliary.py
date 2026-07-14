@@ -10,15 +10,7 @@ from tqdm.auto import tqdm
 import scipy
 import os
 import sys
-from joblib import Parallel, delayed
-from tqdm.auto import tqdm
-
-current_path = os.path.dirname(__file__)
-src_path = os.path.join(current_path, "..")
-sys.path.append(src_path)
-
-from multivelo import mv_logging as logg
-from multivelo import settings
+from .dynamical_chrom_func import top_n_sparse
 
 current_path = os.path.dirname(__file__)
 
@@ -26,115 +18,9 @@ sys.path.append(current_path)
 
 from pyWNN import pyWNN
 
-def do_count(fastqs, input_loc, output_loc, whitelist_path=None, tech="10XV3", strand=None, threads=8, memory=4):
-
-    """Get spliced and unspliced counts from fastq data.
-
-    Makes use of the kallisto-bustools count function:
-    https://www.kallistobus.tools/kb_usage/kb_count/
-    kb-python.readthedocs.io/en/latest/autoapi/kb_python/count/index.html
-
-    Parameters
-    ----------
-    fastqs: `List[str]`
-        The file locations of the fastqs to process.
-    input_loc: `str`
-        The folder location of the reference files.
-        The folder should contain an index file with the name "index.idx", a 
-        transcripts-to-gene file with the name "t2g.txt", a cDNA 
-        transcripts-to-capture file with the name "cdna_t2c.txt", and an
-        intron transcripts-to-captured file with the name intron_t2c.txt.
-    output_loc: `str`
-        The desired folder location of the output of the function.
-    whitelist_path: `str` (default: `None`)
-        Path to a barcode whitelist to use to replace the selected technology's
-        whitelist.
-    tech: `str` (default: `10XV3`)
-        The technology used to collect the single-cell data. 
-    strand: `str` (default: `None`)
-        The strandedness desired to process the data.
-    threads: `int`
-        The number of threads to use for parallel processing.
-    memory: `int`
-        Maximum memory (in GB) to use while processing.
-
-    Returns
-    -------
-    adata_count: :class:`~anndata.AnnData`
-        An AnnData object containing all the spliced and unspliced counts,
-        as well as associated gene names.
-
-    """
-
-    # convert the number of threads and the amount of allocated memory
-    # into correctly-formatted strings for running kb count
-    thread_string = str(threads)
-    memory_string = str(memory) + "G"
-
-    # locations of important files
-    index_loc = input_loc + "/index.idx"
-    t2g_loc = input_loc + "/t2g.txt"
-
-    cdna_t2c = input_loc + "/cdna_t2c.txt"
-    intron_t2c = input_loc + "/intron_t2c.txt"
-
-    # keep the original argv values in case the user specifies it
-    orig_argv = sys.argv
-
-    # assemble the input array to use for kb count
-    input_array = ["count",
-                "count",
-                "-i", index_loc, "-g", t2g_loc,
-                "-x", tech,
-                "-o", output_loc,
-                "-t", thread_string, "-m", memory_string,
-                "--workflow", "lamanno",
-                "-c1", cdna_t2c,
-                "-c2", intron_t2c,
-                "--h5ad"]
-
-    # specify the stranded-ness of the run
-    if strand is not None:
-        input_array.append("--strand")
-        input_array.append(strand)
-
-    # specify the whitelist path of the run
-    if whitelist_path is not None:
-        input_array.append("-w")
-        input_array.append(whitelist_path)
-
-    # add the fastq's we're doing the run on
-    for fastq in fastqs:
-        input_array.append(fastq)
-
-    # use our assembled input array as the parameters for kb count
-    sys.argv = input_array
-
-    # run kb count
-    kbm.main()
-
-    # set argv back to its original value
-    sys.argv = orig_argv
-
-    # get the anndata object for 
-    path = output_loc + "/counts_unfiltered"
-    adata_count = sc.read(path + "/adata.h5ad")
-
-    return adata_count
-
-
-def prepare_gene_mat(var_dict, peaks, gene_mat, adata_atac_X_copy, i):
-
-    for peak in peaks:
-        if peak in var_dict:
-            peak_index = var_dict[peak]
-
-            gene_mat[:, i] += adata_atac_X_copy[:, peak_index]
-
-
 def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
                         peak_dist=10000, min_corr=0.5, gene_body=False,
-                        return_dict=False, parallel=False, n_jobs=1):
+                        return_dict=False, verbose=False):
 
     """Peak to gene aggregation.
 
@@ -158,6 +44,8 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
         Whether to add gene body peaks to the associated promoters.
     return_dict: `bool` (default: `False`)
         Whether to return promoter and enhancer dictionaries.
+    verbose: `bool` (default: `False`)
+        Whether to print number of genes with promoter peaks.
 
     Returns
     -------
@@ -181,12 +69,10 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
             cellranger_version = 2
         else:
             raise ValueError('Peak annotation file should contain 4 columns '
-                             '(CellRanger ARC 1.0.0) or 6 columns (CellRanger '
+                             '(CellRanger ARC 1.0.0) or 5 columns (CellRanger '
                              'ARC 2.0.0)')
-
-        logg.update(f'CellRanger ARC identified as {cellranger_version}.0.0',
-                    v=1)
-
+        if verbose:
+            print(f'CellRanger ARC identified as {cellranger_version}.0.0')
         if cellranger_version == 1:
             for line in f:
                 tmp = line.rstrip().split('\t')
@@ -355,7 +241,8 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
     gene_dict = promoter_dict
     enhancer_dict = {}
     promoter_genes = list(promoter_dict.keys())
-    logg.update(f'Found {len(promoter_genes)} genes with promoter peaks', 1)
+    if verbose:
+        print(f'Found {len(promoter_genes)} genes with promoter peaks')
     for gene in promoter_genes:
         if gene_body:  # add gene-body peaks
             if gene in gene_body_dict:
@@ -375,39 +262,12 @@ def aggregate_peaks_10x(adata_atac, peak_annot_file, linkage_file,
     adata_atac_X_copy = adata_atac.X.A
     gene_mat = np.zeros((adata_atac.shape[0], len(promoter_genes)))
     var_names = adata_atac.var_names.to_numpy()
-    var_dict = {}
-
-    for i, name in enumerate(var_names):
-        var_dict.update({name: i})
-
-    # if we only want to run one job at a time, then no parallelization
-    # is necessary
-    if n_jobs == 1:
-        parallel = False
-
-    if parallel:
-        # if we want to run in parallel, modify the gene_mat variable with
-        # multiple cores, calling prepare_gene_mat with joblib.Parallel()
-        Parallel(n_jobs=n_jobs,
-                 require='sharedmem')(
-                 delayed(prepare_gene_mat)(var_dict,
-                                           gene_dict[promoter_genes[i]],
-                                           gene_mat,
-                                           adata_atac_X_copy,
-                                           i)for i in tqdm(range(
-                                               len(promoter_genes))))
-
-    else:
-        # if we aren't running in parallel, just call prepare_gene_mat
-        # from a for loop
-        for i, gene in tqdm(enumerate(promoter_genes),
-                            total=len(promoter_genes)):
-            prepare_gene_mat(var_dict,
-                             gene_dict[promoter_genes[i]],
-                             gene_mat,
-                             adata_atac_X_copy,
-                             i)
-
+    for i, gene in tqdm(enumerate(promoter_genes), total=len(promoter_genes)):
+        peaks = gene_dict[gene]
+        for peak in peaks:
+            if peak in var_names:
+                peak_index = np.where(var_names == peak)[0][0]
+                gene_mat[:, i] += adata_atac_X_copy[:, peak_index]
     gene_mat[gene_mat < 0] = 0
     gene_mat = AnnData(X=csr_matrix(gene_mat))
     gene_mat.obs_names = pd.Index(list(adata_atac.obs_names))
@@ -450,7 +310,7 @@ def tfidf_norm(adata_atac, scale_factor=1e4, copy=False):
         adata_atac.X = tf.dot(idf) * scale_factor
 
 
-def gen_wnn(adata_rna, adata_adt, dims, nn, random_state=0):
+def gen_wnn(adata_rna, adata_adt, dims, nn):
     """Computes inputs for KNN smoothing.
 
     This function calculates the nn_idx and nn_dist matrices needed
@@ -615,19 +475,16 @@ def calculate_qc_metrics(adata, **kwargs):
     cell_cycle_score: `.var`
         cell cycle score difference between G2M_score and S_score.
     """
+    print("Running from here!")
     sc.pp.calculate_qc_metrics(adata, **kwargs)
     if 'spliced' not in adata.layers:
         raise ValueError('Spliced matrix not found in adata.layers')
     if 'unspliced' not in adata.layers:
         raise ValueError('Unspliced matrix not found in adata.layers')
-
-    logg.update(adata.layers['spliced'].shape, v=1)
-
+    print(adata.layers['spliced'].shape)
     total_s = np.nansum(adata.layers['spliced'].toarray(), axis=1)
     total_u = np.nansum(adata.layers['unspliced'].toarray(), axis=1)
-
-    logg.update(total_u.shape, v=1)
-
+    print(total_u.shape)
     adata.obs['total_unspliced'] = total_u
     adata.obs['total_spliced'] = total_s
     adata.obs['unspliced_ratio'] = total_u / (total_s + total_u)
@@ -687,8 +544,8 @@ def ellipse_fit(adata,
     gn = len(genes)
     if gn < n_cols:
         n_cols = gn
-    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, squeeze=False,
-                            figsize=(2 * n_cols, 2.4 * (-(-gn // n_cols)))
+    fig, axs = plt.subplots(-(-gn // n_cols), n_cols, figsize=(2 * n_cols,
+                            2.4 * (-(-gn // n_cols)))
                             if figsize is None else figsize)
     count = 0
     for gene in genes:
@@ -826,6 +683,7 @@ def ellipse_fit(adata,
 
 
 def compute_quantile_scores(adata,
+                            verbose=True,
                             n_pcs=30,
                             n_neighbors=30
                             ):
@@ -847,6 +705,8 @@ def compute_quantile_scores(adata,
     ----------
     adata: :class:`~anndata.AnnData`
         RNA anndata object. Required fields: `Mu` and `Ms`.
+    verbose: `bool` (default: `True`)
+        Print the number of good ellipse fit based on some criteria.
     n_pcs: `int` (default: 30)
         Number of principal components to compute connectivities.
     n_neighbors: `int` (default: 30)
@@ -942,11 +802,10 @@ def compute_quantile_scores(adata,
     adata.layers['quantile_scores_2nd_bit'] = quantile_scores_2bit[:, :, 1]
     quantile_gene[quality_gene_idx] = True
 
-    if settings.VERBOSITY >= 1:
+    if verbose:
         perc_good = np.sum(quantile_gene) / adata.n_vars * 100
-
-    logg.update(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}%'
-                'genes have good ellipse fits', v=1)
+        print(f'{np.sum(quantile_gene)}/{adata.n_vars} - {perc_good:.3g}%'
+              'genes have good ellipse fits')
 
     adata.obs['quantile_score_sum'] = \
         np.sum(adata[:, quantile_gene].layers['quantile_scores'], axis=1)

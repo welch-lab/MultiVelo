@@ -1,8 +1,4 @@
-from multivelo import mv_logging as logg
-from multivelo import settings
-
 import os
-import sys
 import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
@@ -16,129 +12,13 @@ from scanpy import Neighbors
 import scvelo as scv
 import pandas as pd
 import seaborn as sns
-from numba import njit
-import numba
+from numba import jit
 from numba.typed import List
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
-import math
-import torch
-from torch import nn
-
-current_path = os.path.dirname(__file__)
-src_path = os.path.join(current_path, "..")
-sys.path.append(src_path)
 
 
-# a funciton to check for invalid values of different parameters
-def check_params(alpha_c,
-                 alpha,
-                 beta,
-                 gamma,
-                 c0=None,
-                 u0=None,
-                 s0=None):
-
-    new_alpha_c = alpha_c
-    new_alpha = alpha
-    new_beta = beta
-    new_gamma = gamma
-
-    new_c0 = c0
-    new_u0 = u0
-    new_s0 = s0
-
-    inf_fix = 1e10
-    zero_fix = 1e-10
-
-    # check if any of our parameters are infinite
-    if c0 is not None and math.isinf(c0):
-        logg.error("c0 is infinite.", v=1)
-        new_c0 = inf_fix
-    if u0 is not None and math.isinf(u0):
-        logg.error("u0 is infinite.", v=1)
-        new_u0 = inf_fix
-    if s0 is not None and math.isinf(s0):
-        logg.error("s0 is infinite.", v=1)
-        new_s0 = inf_fix
-    if math.isinf(alpha_c):
-        new_alpha_c = inf_fix
-        logg.error("alpha_c is infinite.", v=1)
-    if math.isinf(alpha):
-        new_alpha = inf_fix
-        logg.error("alpha is infinite.", v=1)
-    if math.isinf(beta):
-        new_beta = inf_fix
-        logg.error("beta is infinite.", v=1)
-    if math.isinf(gamma):
-        new_gamma = inf_fix
-        logg.error("gamma is infinite.", v=1)
-
-    # check if any of our parameters are nan
-    if c0 is not None and math.isnan(c0):
-        logg.error("c0 is Nan.", v=1)
-        new_c0 = zero_fix
-    if u0 is not None and math.isnan(u0):
-        logg.error("u0 is Nan.", v=1)
-        new_u0 = zero_fix
-    if s0 is not None and math.isnan(s0):
-        logg.error("s0 is Nan.", v=1)
-        new_s0 = zero_fix
-    if math.isnan(alpha_c):
-        new_alpha_c = zero_fix
-        logg.error("alpha_c is Nan.", v=1)
-    if math.isnan(alpha):
-        new_alpha = zero_fix
-        logg.error("alpha is Nan.", v=1)
-    if math.isnan(beta):
-        new_beta = zero_fix
-        logg.error("beta is Nan.", v=1)
-    if math.isnan(gamma):
-        new_gamma = zero_fix
-        logg.error("gamma is Nan.", v=1)
-
-    # check if any of our rate parameters are 0
-    if alpha_c < 1e-7:
-        new_alpha_c = zero_fix
-        logg.error("alpha_c is zero.", v=1)
-    if alpha < 1e-7:
-        new_alpha = zero_fix
-        logg.error("alpha is zero.", v=1)
-    if beta < 1e-7:
-        new_beta = zero_fix
-        logg.error("beta is zero.", v=1)
-    if gamma < 1e-7:
-        new_gamma = zero_fix
-        logg.error("gamma is zero.", v=1)
-
-    if beta == alpha_c:
-        new_beta += zero_fix
-        logg.error("alpha_c and beta are equal, leading to divide by zero",
-                   v=1)
-    if beta == gamma:
-        new_gamma += zero_fix
-        logg.error("gamma and beta are equal, leading to divide by zero",
-                   v=1)
-    if alpha_c == gamma:
-        new_gamma += zero_fix
-        logg.error("gamma and alpha_c are equal, leading to divide by zero",
-                   v=1)
-
-    if c0 is not None and u0 is not None and s0 is not None:
-        return new_alpha_c, new_alpha, new_beta, new_gamma, new_c0, new_u0, \
-               new_s0
-
-    return new_alpha_c, new_alpha, new_beta, new_gamma
-
-
-@njit(
-    locals={
-            "res": numba.types.float64[:, ::1],
-            "eat": numba.types.float64[::1],
-            "ebt": numba.types.float64[::1],
-            "egt": numba.types.float64[::1],
-    },
-    fastmath=True)
+@jit(nopython=True, fastmath=True)
 def predict_exp(tau,
                 c0,
                 u0,
@@ -170,13 +50,9 @@ def predict_exp(tau,
         else:
             kc = 0
             alpha_c *= scale_cc
-
     const = (kc - c0) * alpha / (beta - alpha_c)
-
     res[:, 0] = kc - (kc - c0) * eat
-
     if pred_r:
-
         res[:, 1] = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
         res[:, 1] += const * (ebt - eat)
 
@@ -184,30 +60,13 @@ def predict_exp(tau,
         res[:, 2] += ((beta / (gamma - beta)) *
                       ((alpha * kc / beta) - u0 - const) * (egt - ebt))
         res[:, 2] += (beta / (gamma - alpha_c)) * const * (egt - eat)
-
     else:
         res[:, 1] = np.zeros(len(tau))
         res[:, 2] = np.zeros(len(tau))
     return res
 
 
-@njit(locals={
-            "exp_sw1": numba.types.float64[:, ::1],
-            "exp_sw2": numba.types.float64[:, ::1],
-            "exp_sw3": numba.types.float64[:, ::1],
-            "exp1": numba.types.float64[:, ::1],
-            "exp2": numba.types.float64[:, ::1],
-            "exp3": numba.types.float64[:, ::1],
-            "exp4": numba.types.float64[:, ::1],
-            "tau_sw1": numba.types.float64[::1],
-            "tau_sw2": numba.types.float64[::1],
-            "tau_sw3": numba.types.float64[::1],
-            "tau1": numba.types.float64[::1],
-            "tau2": numba.types.float64[::1],
-            "tau3": numba.types.float64[::1],
-            "tau4": numba.types.float64[::1]
-    },
-    fastmath=True)
+@jit(nopython=True, fastmath=True)
 def generate_exp(tau_list,
                  t_sw_array,
                  alpha_c,
@@ -386,23 +245,7 @@ def generate_exp(tau_list,
     return (exp1, exp2, exp3, exp4), (exp_sw1, exp_sw2, exp_sw3)
 
 
-@njit(locals={
-            "exp_sw1": numba.types.float64[:, ::1],
-            "exp_sw2": numba.types.float64[:, ::1],
-            "exp_sw3": numba.types.float64[:, ::1],
-            "exp1": numba.types.float64[:, ::1],
-            "exp2": numba.types.float64[:, ::1],
-            "exp3": numba.types.float64[:, ::1],
-            "exp4": numba.types.float64[:, ::1],
-            "tau_sw1": numba.types.float64[::1],
-            "tau_sw2": numba.types.float64[::1],
-            "tau_sw3": numba.types.float64[::1],
-            "tau1": numba.types.float64[::1],
-            "tau2": numba.types.float64[::1],
-            "tau3": numba.types.float64[::1],
-            "tau4": numba.types.float64[::1]
-    },
-    fastmath=True)
+@jit(nopython=True, fastmath=True)
 def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
                           scale_cc=1, model=1):
     if beta == alpha_c:
@@ -508,10 +351,7 @@ def generate_exp_backward(tau_list, t_sw_array, alpha_c, alpha, beta, gamma,
     return (exp1, exp2, exp3), (exp_sw1, exp_sw2)
 
 
-@njit(locals={
-            "res": numba.types.float64[:, ::1],
-    },
-    fastmath=True)
+@jit(nopython=True, fastmath=True)
 def ss_exp(alpha_c, alpha, beta, gamma, pred_r=True, chrom_open=True):
     res = np.empty((1, 3))
     if not chrom_open:
@@ -529,13 +369,7 @@ def ss_exp(alpha_c, alpha, beta, gamma, pred_r=True, chrom_open=True):
     return res
 
 
-@njit(locals={
-            "ss1": numba.types.float64[:, ::1],
-            "ss2": numba.types.float64[:, ::1],
-            "ss3": numba.types.float64[:, ::1],
-            "ss4": numba.types.float64[:, ::1]
-    },
-    fastmath=True)
+@jit(nopython=True, fastmath=True)
 def compute_ss_exp(alpha_c, alpha, beta, gamma, model=0):
     if model == 0:
         ss1 = ss_exp(alpha_c, alpha, beta, gamma, pred_r=False)
@@ -556,7 +390,7 @@ def compute_ss_exp(alpha_c, alpha, beta, gamma, model=0):
     return np.vstack((ss1, ss2, ss3, ss4))
 
 
-@njit(fastmath=True)
+@jit(nopython=True, fastmath=True)
 def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
                        pred_r=True, chrom_open=True, rna_only=False):
     if rna_only:
@@ -576,30 +410,7 @@ def velocity_equations(c, u, s, alpha_c, alpha, beta, gamma, scale_cc=1,
             return alpha_c - alpha_c * c, np.zeros(len(u)), np.zeros(len(u))
 
 
-@njit(locals={
-            "state0": numba.types.boolean[::1],
-            "state1": numba.types.boolean[::1],
-            "state2": numba.types.boolean[::1],
-            "state3": numba.types.boolean[::1],
-            "tau1": numba.types.float64[::1],
-            "tau2": numba.types.float64[::1],
-            "tau3": numba.types.float64[::1],
-            "tau4": numba.types.float64[::1],
-            "exp_list": numba.types.Tuple((numba.types.float64[:, ::1],
-                                           numba.types.float64[:, ::1],
-                                           numba.types.float64[:, ::1],
-                                           numba.types.float64[:, ::1])),
-            "exp_sw_list": numba.types.Tuple((numba.types.float64[:, ::1],
-                                              numba.types.float64[:, ::1],
-                                              numba.types.float64[:, ::1])),
-            "c": numba.types.float64[::1],
-            "u": numba.types.float64[::1],
-            "s": numba.types.float64[::1],
-            "vc_vec": numba.types.float64[::1],
-            "vu_vec": numba.types.float64[::1],
-            "vs_vec": numba.types.float64[::1]
-    },
-    fastmath=True)
+@jit(nopython=True, fastmath=True)
 def compute_velocity(t,
                      t_sw_array,
                      state,
@@ -773,7 +584,7 @@ def anchor_points(t_sw_array, total_h=20, t=1000, mode='uniform',
         return tau_list
 
 
-# @jit(nopython=True, fastmath=True, debug=True)
+@jit(nopython=True, fastmath=True)
 def pairwise_distance_square(X, Y):
     res = np.empty((X.shape[0], Y.shape[0]), dtype=X.dtype)
     for a in range(X.shape[0]):
@@ -808,7 +619,6 @@ def calculate_dist_and_time(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    alpha_c, alpha, beta, gamma = check_params(alpha_c, alpha, beta, gamma)
     exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                          t_sw_array[:switch],
                                          alpha_c,
@@ -973,416 +783,6 @@ def calculate_dist_and_time(c, u, s,
         return min_dist, state_pred, max_u, max_s, t_sw_adjust
 
 
-def t_of_c(alpha_c, k_c, c_o, c, rescale_factor, sw_t):
-
-    coef = -float(1)/alpha_c
-
-    c_val = np.clip(c / rescale_factor, a_min=0, a_max=1)
-
-    in_log = (float(k_c) - c_val) / float((k_c) - (c_o))
-
-    epsilon = 1e-9
-
-    return_val = coef * np.log(in_log + epsilon)
-
-    if k_c == 0:
-        return_val += sw_t
-
-    return return_val
-
-
-def make_X(c, u, s,
-           max_u,
-           max_s,
-           alpha_c, alpha, beta, gamma,
-           gene_sw_t,
-           c0, c_sw1, c_sw2, c_sw3,
-           u0, u_sw1, u_sw2, u_sw3,
-           s0, s_sw1, s_sw2, s_sw3,
-           model, direction, state):
-
-    if direction == "complete":
-        dire = 0
-    elif direction == "on":
-        dire = 1
-    elif direction == "off":
-        dire = 2
-
-    n = c.shape[0]
-
-    epsilon = 1e-5
-
-    if dire == 0:
-        x = np.concatenate((np.array([c,
-                                      np.log(u + epsilon),
-                                      np.log(s + epsilon)]),
-                            np.full((n, 17), [np.log(alpha_c + epsilon),
-                                              np.log(alpha + epsilon),
-                                              np.log(beta + epsilon),
-                                              np.log(gamma + epsilon),
-                                              c_sw1, c_sw2, c_sw3,
-                                              np.log(u_sw2 + epsilon),
-                                              np.log(u_sw3 + epsilon),
-                                              np.log(s_sw2 + epsilon),
-                                              np.log(s_sw3 + epsilon),
-                                              np.log(max_u),
-                                              np.log(max_s),
-                                              gene_sw_t[0],
-                                              gene_sw_t[1],
-                                              gene_sw_t[2],
-                                              model]).T,
-                            np.full((n, 1), state).T
-                            )).T.astype(np.float32)
-
-    elif dire == 1:
-        x = np.concatenate((np.array([c,
-                                      np.log(u + epsilon),
-                                      np.log(s + epsilon)]),
-                            np.full((n, 12), [np.log(alpha_c + epsilon),
-                                              np.log(alpha + epsilon),
-                                              np.log(beta + epsilon),
-                                              np.log(gamma + epsilon),
-                                              c_sw1, c_sw2,
-                                              np.log(u_sw1 + epsilon),
-                                              np.log(u_sw2 + epsilon),
-                                              np.log(s_sw1 + epsilon),
-                                              np.log(s_sw2 + epsilon),
-                                              gene_sw_t[0],
-                                              model]).T,
-                            np.full((n, 1), state).T
-                            )).T.astype(np.float32)
-
-    elif dire == 2:
-        if model == 1:
-
-            max_u_t = -(float(1)/alpha_c)*np.log((max_u*beta)
-                                                 / (alpha*c0[2]))
-
-            x = np.concatenate((np.array([np.log(c + epsilon),
-                                          np.log(u + epsilon),
-                                          np.log(s + epsilon)]),
-                                np.full((n, 14), [np.log(alpha_c + epsilon),
-                                                  np.log(alpha + epsilon),
-                                                  np.log(beta + epsilon),
-                                                  np.log(gamma + epsilon),
-                                                  c_sw2, c_sw3,
-                                                  np.log(u_sw2 + epsilon),
-                                                  np.log(u_sw3 + epsilon),
-                                                  np.log(s_sw2 + epsilon),
-                                                  np.log(s_sw3 + epsilon),
-                                                  max_u_t,
-                                                  np.log(max_u),
-                                                  np.log(max_s),
-                                                  gene_sw_t[2]]).T,
-                                np.full((n, 1), state).T
-                                )).T.astype(np.float32)
-        elif model == 2:
-            x = np.concatenate((np.array([c,
-                                          np.log(u + epsilon),
-                                          np.log(s + epsilon)]),
-                                np.full((n, 12), [np.log(alpha_c + epsilon),
-                                                  np.log(alpha + epsilon),
-                                                  np.log(beta + epsilon),
-                                                  np.log(gamma + epsilon),
-                                                  c_sw2, c_sw3,
-                                                  np.log(u_sw2 + epsilon),
-                                                  np.log(u_sw3 + epsilon),
-                                                  np.log(s_sw2 + epsilon),
-                                                  np.log(s_sw3 + epsilon),
-                                                  np.log(max_u),
-                                                  gene_sw_t[2]]).T,
-                                np.full((n, 1), state).T
-                                )).T.astype(np.float32)
-
-    return x
-
-
-def calculate_dist_and_time_nn(c, u, s,
-                               max_u, max_s,
-                               t_sw_array,
-                               alpha_c, alpha, beta, gamma,
-                               rescale_c, rescale_u,
-                               ode_model_0, ode_model_1,
-                               ode_model_2_m1, ode_model_2_m2,
-                               device,
-                               scale_cc=1,
-                               scale_factor=None,
-                               model=1,
-                               conn=None,
-                               t=1000, k=1,
-                               direction='complete',
-                               total_h=20,
-                               rna_only=False,
-                               penalize_gap=True,
-                               all_cells=True):
-
-    rescale_factor = np.array([rescale_c, rescale_u, 1.0])
-
-    exp_list_net, exp_sw_list_net = generate_exp(None,
-                                                 t_sw_array,
-                                                 alpha_c,
-                                                 alpha,
-                                                 beta,
-                                                 gamma,
-                                                 model=model,
-                                                 scale_cc=scale_cc,
-                                                 rna_only=rna_only)
-
-    N = len(c)
-    N_list = np.arange(N)
-
-    if scale_factor is None:
-        cur_scale_factor = np.array([np.std(c),
-                                     np.std(u),
-                                     np.std(s)])
-    else:
-        cur_scale_factor = scale_factor
-
-    t_pred_per_state = []
-    dists_per_state = []
-
-    dire = 0
-
-    if direction == "on":
-        states = [0, 1]
-        dire = 1
-
-    elif direction == "off":
-        states = [2, 3]
-        dire = 2
-
-    else:
-        states = [0, 1, 2, 3]
-        dire = 0
-
-    dists_per_state = np.zeros((N, len(states)))
-    t_pred_per_state = np.zeros((N, len(states)))
-    u_pred_per_state = np.zeros((N, len(states)))
-    s_pred_per_state = np.zeros((N, len(states)))
-
-    increment = 0
-
-    # determine when we can consider u and s close to zero
-    zero_us = np.logical_and((u < 0.1 * max_u), (s < 0.1 * max_s))
-
-    t_pred = np.zeros(N)
-    dists = None
-
-    # pass all the data through the neural net as each valid state
-    for state in states:
-
-        # when u and s = 0, it's better to use the inverse c equation
-        # instead of the neural network, which happens for part of
-        # state 3 and all of state 0
-        inverse_c = np.logical_or(state == 0,
-                                  np.logical_and(state == 3, zero_us))
-
-        not_inverse_c = np.logical_not(inverse_c)
-
-        # if we want to use the inverse c equation...
-        if np.any(inverse_c):
-
-            # find out at what switch time chromatin closes
-            c_sw_t = t_sw_array[int(model)]
-
-            # figure out whether chromatin is opening/closing and what
-            # the initial c value is
-            if state <= model:
-                k_c = 1
-                c_0_for_t_guess = 0
-            elif state > model:
-                k_c = 0
-                c_0_for_t_guess = exp_sw_list_net[int(model)][0, 0]
-
-            # calculate predicted time from the inverse c equation
-            t_pred[inverse_c] = t_of_c(alpha_c,
-                                       k_c, c_0_for_t_guess,
-                                       c[inverse_c],
-                                       rescale_factor[0],
-                                       c_sw_t)
-
-        # if there are points where we want to use the neural network...
-        if np.any(not_inverse_c):
-
-            # create an input matrix from the data
-            x = make_X(c[not_inverse_c] / rescale_factor[0],
-                       u[not_inverse_c] / rescale_factor[1],
-                       s[not_inverse_c] / rescale_factor[2],
-                       max_u,
-                       max_s,
-                       alpha_c*(scale_cc if state > model else 1),
-                       alpha, beta, gamma,
-                       t_sw_array,
-                       0,
-                       exp_sw_list_net[0][0, 0],
-                       exp_sw_list_net[1][0, 0],
-                       exp_sw_list_net[2][0, 0],
-                       0,
-                       exp_sw_list_net[0][0, 1],
-                       exp_sw_list_net[1][0, 1],
-                       exp_sw_list_net[2][0, 1],
-                       0,
-                       exp_sw_list_net[0][0, 2],
-                       exp_sw_list_net[1][0, 2],
-                       exp_sw_list_net[2][0, 2],
-                       model, direction, state)
-
-            # do a forward pass
-            if dire == 0:
-                t_pred_ten = ode_model_0(torch.tensor(x,
-                                                      dtype=torch.float,
-                                                      device=device)
-                                         .reshape(-1, x.shape[1]))
-
-            elif dire == 1:
-                t_pred_ten = ode_model_1(torch.tensor(x,
-                                                      dtype=torch.float,
-                                                      device=device)
-                                         .reshape(-1, x.shape[1]))
-
-            elif dire == 2:
-                if model == 1:
-                    t_pred_ten = ode_model_2_m1(torch.tensor(x,
-                                                             dtype=torch.float,
-                                                             device=device)
-                                                .reshape(-1, x.shape[1]))
-                elif model == 2:
-                    t_pred_ten = ode_model_2_m2(torch.tensor(x,
-                                                             dtype=torch.float,
-                                                             device=device)
-                                                .reshape(-1, x.shape[1]))
-
-            # make a numpy array out of our tensor of predicted time points
-            t_pred[not_inverse_c] = (t_pred_ten.cpu().detach().numpy()
-                                     .flatten()*21) - 1
-
-        # calculate tau values from our predicted time points
-        if state == 0:
-            t_pred = np.clip(t_pred, a_min=0, a_max=t_sw_array[0])
-            tau1 = t_pred
-            tau2 = []
-            tau3 = []
-            tau4 = []
-        elif state == 1:
-            tau1 = []
-            t_pred = np.clip(t_pred, a_min=t_sw_array[0], a_max=t_sw_array[1])
-            tau2 = t_pred - t_sw_array[0]
-            tau3 = []
-            tau4 = []
-        elif state == 2:
-            tau1 = []
-            tau2 = []
-            t_pred = np.clip(t_pred, a_min=t_sw_array[1], a_max=t_sw_array[2])
-            tau3 = t_pred - t_sw_array[1]
-            tau4 = []
-        elif state == 3:
-            tau1 = []
-            tau2 = []
-            tau3 = []
-            t_pred = np.clip(t_pred, a_min=t_sw_array[2], a_max=20)
-            tau4 = t_pred - t_sw_array[2]
-
-        tau_list = [tau1, tau2, tau3, tau4]
-
-        valid_vals = []
-
-        for i in range(len(tau_list)):
-            if len(tau_list[i]) == 0:
-                tau_list[i] = np.array([0.0])
-            else:
-                valid_vals.append(i)
-
-        # take the time points and get predicted c/u/s values from them
-        exp_list, exp_sw_list_2 = generate_exp(tau_list,
-                                               t_sw_array,
-                                               alpha_c,
-                                               alpha,
-                                               beta,
-                                               gamma,
-                                               model=model,
-                                               scale_cc=scale_cc,
-                                               rna_only=rna_only)
-
-        pred_c = np.concatenate([exp_list[x][:, 0] * rescale_factor[0]
-                                 for x in valid_vals])
-        pred_u = np.concatenate([exp_list[x][:, 1] * rescale_factor[1]
-                                 for x in valid_vals])
-        pred_s = np.concatenate([exp_list[x][:, 2] * rescale_factor[2]
-                                 for x in valid_vals])
-
-        # calculate distance between predicted and real values
-        c_diff = (c - pred_c) / cur_scale_factor[0]
-        u_diff = (u - pred_u) / cur_scale_factor[1]
-        s_diff = (s - pred_s) / cur_scale_factor[2]
-
-        dists = (c_diff*c_diff) + (u_diff*u_diff) + (s_diff*s_diff)
-
-        if conn is not None:
-            dists = conn.dot(dists)
-
-        # store the distances, times, and predicted u and s values for
-        # each state
-        dists_per_state[:, increment] = dists
-        t_pred_per_state[:, increment] = t_pred
-        u_pred_per_state[:, increment] = pred_u
-        s_pred_per_state[:, increment] = pred_s
-
-        increment += 1
-
-    # whichever state has the smallest distance for a given data point
-    # is our predicted state
-    state_pred = np.argmin(dists_per_state, axis=1)
-
-    # slice dists and predicted time over the correct state
-    dists = dists_per_state[N_list, state_pred]
-    t_pred = t_pred_per_state[N_list, state_pred]
-
-    max_t = t_pred.max()
-    min_t = t_pred.min()
-
-    penalty = 0
-
-    # for induction and complete genes, add a penalty to ensure that not
-    # all points are in state 0
-    if direction == "on" or direction == "complete":
-
-        if t_sw_array[0] >= max_t:
-            penalty += (t_sw_array[0] - max_t) + 10
-
-    # for induction genes, add a penalty to ensure that predicted time
-    # points are not "out of bounds" by being greater than the
-    # second switch time
-    if direction == "on":
-
-        if min_t > t_sw_array[1]:
-            penalty += (min_t - t_sw_array[1]) + 10
-
-    # for repression genes, add a penalty to ensure that predicted time
-    # points are not "out of bounds" by being smaller than the
-    # second switch time
-    if direction == "off":
-
-        if t_sw_array[1] >= max_t:
-            penalty += (t_sw_array[1] - max_t) + 10
-
-    # add penalty to ensure that the time points aren't concentrated to
-    # one spot
-    if np.abs(max_t - min_t) <= 1e-2:
-        penalty += np.abs(max_t - min_t) + 10
-
-    # because the indices chosen by np.argmin are just indices,
-    # we need to increment by two to get the true state number for
-    # our "off" genes (e.g. so that they're in the domain of [2,3] instead
-    # of [0,1])
-    if direction == "off":
-        state_pred += 2
-
-    if all_cells:
-        return dists, t_pred, state_pred, max_u, max_s, penalty
-    else:
-        return dists, state_pred, max_u, max_s, penalty
-
-
 # @jit(nopython=True, fastmath=True)
 def compute_likelihood(c, u, s,
                        t_sw_array,
@@ -1416,7 +816,6 @@ def compute_likelihood(c, u, s,
     switch = np.sum(t_sw_array < total_h)
     typed_tau_list = List()
     [typed_tau_list.append(x) for x in tau_list]
-    alpha_c, alpha, beta, gamma = check_params(alpha_c, alpha, beta, gamma)
     exp_list, _ = generate_exp(typed_tau_list,
                                t_sw_array[:switch],
                                alpha_c,
@@ -1478,16 +877,10 @@ class ChromatinDynamical:
                  model=None,
                  max_iter=10,
                  init_mode="grid",
-                 device="cpu",
-                 neural_net=False,
-                 adam=False,
-                 adam_lr=None,
-                 adam_beta1=None,
-                 adam_beta2=None,
-                 batch_size=None,
                  local_std=None,
                  embed_coord=None,
                  connectivities=None,
+                 verbose=False,
                  plot=False,
                  save_plot=False,
                  plot_dir=None,
@@ -1504,19 +897,10 @@ class ChromatinDynamical:
                  t_=None
                  ):
 
-        self.device = device
         self.gene = gene
         self.local_std = local_std
         self.conn = connectivities
-
-        self.neural_net = neural_net
-        self.adam = adam
-        self.adam_lr = adam_lr
-        self.adam_beta1 = adam_beta1
-        self.adam_beta2 = adam_beta2
-        self.batch_size = batch_size
-
-        self.torch_type = type(u[0].item())
+        self.verbose = verbose
 
         # fitting arguments
         self.init_mode = init_mode
@@ -1589,18 +973,6 @@ class ChromatinDynamical:
             self.low_quality = True
         self.scale_c, self.scale_u, self.scale_s = np.max(self.c_all) \
             if not self.rna_only else 1.0, self.std_u/self.std_s, 1.0
-
-        # if we're on neural net mode, check to see if c is way bigger than
-        # u or s, which would be very hard for the neural net to fit
-        if not self.low_quality and neural_net:
-            max_c_orig = np.max(self.c)
-            if max_c_orig / np.max(self.u) > 500:
-                self.low_quality = True
-
-            if not self.low_quality:
-                if max_c_orig / np.max(self.s) > 500:
-                    self.low_quality = True
-
         self.c_all /= self.scale_c
         self.u_all /= self.scale_u
         self.s_all /= self.scale_s
@@ -1611,81 +983,21 @@ class ChromatinDynamical:
                                       self.weight_c, 1.0, 1.0])
         self.scale_factor[0] = 1 if self.rna_only else self.scale_factor[0]
         self.max_u, self.max_s = np.max(self.u), np.max(self.s)
-        self.max_u_all, self.max_s_all = np.max(self.u_all), np.max(self.s_all)
         if self.conn is not None:
             self.conn_sub = self.conn[np.ix_(self.non_zero & self.non_outlier,
                                              self.non_zero & self.non_outlier)]
         else:
             self.conn_sub = None
-
-        logg.update(f'{len(self.u)} cells passed filter and will be used to '
-                    'compute trajectories.', v=2)
+        if self.verbose >= 2:
+            print(f'{len(self.u)} cells passed filter and will be used to '
+                  'compute trajectories.')
         self.known_pars = (True
                            if None not in [rescale_u, alpha, beta, gamma, t_]
                            else False)
-        if self.known_pars:
-            logg.update(f'known parameters for gene {self.gene} are '
-                        f'scaling={rescale_u}, alpha={alpha}, beta={beta},'
-                        f' gamma={gamma}, t_={t_}.', v=1)
-
-        # define neural networks
-        self.ode_model_0 = nn.Sequential(
-            nn.Linear(21, 150),
-            nn.ReLU(),
-            nn.Linear(150, 112),
-            nn.ReLU(),
-            nn.Linear(112, 75),
-            nn.ReLU(),
-            nn.Linear(75, 1),
-            nn.Sigmoid()
-        )
-
-        self.ode_model_1 = nn.Sequential(
-            nn.Linear(16, 64),
-            nn.ReLU(),
-            nn.Linear(64, 48),
-            nn.ReLU(),
-            nn.Linear(48, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()
-        )
-
-        self.ode_model_2_m1 = nn.Sequential(
-            nn.Linear(18, 220),
-            nn.ReLU(),
-            nn.Linear(220, 165),
-            nn.ReLU(),
-            nn.Linear(165, 110),
-            nn.ReLU(),
-            nn.Linear(110, 1),
-            nn.Sigmoid()
-        )
-
-        self.ode_model_2_m2 = nn.Sequential(
-            nn.Linear(16, 150),
-            nn.ReLU(),
-            nn.Linear(150, 112),
-            nn.ReLU(),
-            nn.Linear(112, 75),
-            nn.ReLU(),
-            nn.Linear(75, 1),
-            nn.Sigmoid()
-        )
-
-        self.ode_model_0.to(torch.device(self.device))
-        self.ode_model_1.to(torch.device(self.device))
-        self.ode_model_2_m1.to(torch.device(self.device))
-        self.ode_model_2_m2.to(torch.device(self.device))
-
-        # load in neural network
-        net_path = os.path.dirname(os.path.abspath(__file__)) + \
-            "/neural_nets/"
-
-        self.ode_model_0.load_state_dict(torch.load(net_path+"dir0.pt"))
-        self.ode_model_1.load_state_dict(torch.load(net_path+"dir1.pt"))
-        self.ode_model_2_m1.load_state_dict(torch.load(net_path+"dir2_m1.pt"))
-        self.ode_model_2_m2.load_state_dict(torch.load(net_path+"dir2_m2.pt"))
+        if self.known_pars and self.verbose >= 1:
+            print(f'known parameters for gene {self.gene} are '
+                  'scaling={rescale_u}, alpha={alpha}, beta={beta},'
+                  ' gamma={gamma}, t_={t_}.')
 
         # 4 rate parameters
         self.alpha_c = 0.1
@@ -1773,391 +1085,6 @@ class ChromatinDynamical:
                                     self.rescale_c,
                                     self.rescale_u])
 
-    # the torch tensor version of the anchor points function
-    def anchor_points_ten(self, t_sw_array, total_h=20, t=1000, mode='uniform',
-                          return_time=False):
-
-        t_ = torch.linspace(0, total_h, t, device=self.device,
-                            dtype=self.torch_type)
-        tau1 = t_[t_ <= t_sw_array[0]]
-        tau2 = t_[(t_sw_array[0] < t_) & (t_ <= t_sw_array[1])] - t_sw_array[0]
-        tau3 = t_[(t_sw_array[1] < t_) & (t_ <= t_sw_array[2])] - t_sw_array[1]
-        tau4 = t_[t_sw_array[2] < t_] - t_sw_array[2]
-
-        if mode == 'log':
-            if len(tau1) > 0:
-                tau1 = torch.expm1(tau1)
-                tau1 = tau1 / torch.max(tau1) * (t_sw_array[0])
-            if len(tau2) > 0:
-                tau2 = torch.expm1(tau2)
-                tau2 = tau2 / torch.max(tau2) * (t_sw_array[1] - t_sw_array[0])
-            if len(tau3) > 0:
-                tau3 = torch.expm1(tau3)
-                tau3 = tau3 / torch.max(tau3) * (t_sw_array[2] - t_sw_array[1])
-            if len(tau4) > 0:
-                tau4 = torch.expm1(tau4)
-                tau4 = tau4 / torch.max(tau4) * (total_h - t_sw_array[2])
-
-        tau_list = [tau1, tau2, tau3, tau4]
-        if return_time:
-            return t_, tau_list
-        else:
-            return tau_list
-
-    # the torch version of the predict_exp function
-    def predict_exp_ten(self,
-                        tau,
-                        c0,
-                        u0,
-                        s0,
-                        alpha_c,
-                        alpha,
-                        beta,
-                        gamma,
-                        scale_cc=None,
-                        pred_r=True,
-                        chrom_open=True,
-                        backward=False,
-                        rna_only=False):
-
-        if scale_cc is None:
-            scale_cc = torch.tensor(1.0, requires_grad=True,
-                                    device=self.device,
-                                    dtype=self.torch_type)
-
-        if len(tau) == 0:
-            return torch.empty((0, 3),
-                               requires_grad=True,
-                               device=self.device,
-                               dtype=self.torch_type)
-        if backward:
-            tau = -tau
-
-        eat = torch.exp(-alpha_c * tau)
-        ebt = torch.exp(-beta * tau)
-        egt = torch.exp(-gamma * tau)
-        if rna_only:
-            kc = 1
-            c0 = 1
-        else:
-            if chrom_open:
-                kc = 1
-            else:
-                kc = 0
-                alpha_c = alpha_c * scale_cc
-
-        const = (kc - c0) * alpha / (beta - alpha_c)
-
-        res0 = kc - (kc - c0) * eat
-
-        if pred_r:
-
-            res1 = u0 * ebt + (alpha * kc / beta) * (1 - ebt)
-            res1 += const * (ebt - eat)
-
-            res2 = s0 * egt + (alpha * kc / gamma) * (1 - egt)
-            res2 += ((beta / (gamma - beta)) *
-                     ((alpha * kc / beta) - u0 - const) * (egt - ebt))
-            res2 += (beta / (gamma - alpha_c)) * const * (egt - eat)
-
-        else:
-            res1 = torch.zeros(len(tau), device=self.device,
-                               requires_grad=True,
-                               dtype=self.torch_type)
-            res2 = torch.zeros(len(tau), device=self.device,
-                               requires_grad=True,
-                               dtype=self.torch_type)
-
-        res = torch.stack((res0, res1, res2), 1)
-
-        return res
-
-    # the torch tensor version of the generate_exp function
-    def generate_exp_tens(self,
-                          tau_list,
-                          t_sw_array,
-                          alpha_c,
-                          alpha,
-                          beta,
-                          gamma,
-                          scale_cc=None,
-                          model=1,
-                          rna_only=False):
-
-        if scale_cc is None:
-            scale_cc = torch.tensor(1.0, requires_grad=True,
-                                    device=self.device,
-                                    dtype=self.torch_type)
-
-        if beta == alpha_c:
-            beta += 1e-3
-        if gamma == beta or gamma == alpha_c:
-            gamma += 1e-3
-        switch = int(t_sw_array.size(dim=0))
-        if switch >= 1:
-            tau_sw1 = torch.tensor([t_sw_array[0]], requires_grad=True,
-                                   device=self.device,
-                                   dtype=self.torch_type)
-            if switch >= 2:
-                tau_sw2 = torch.tensor([t_sw_array[1] - t_sw_array[0]],
-                                       requires_grad=True,
-                                       device=self.device,
-                                       dtype=self.torch_type)
-                if switch == 3:
-                    tau_sw3 = torch.tensor([t_sw_array[2] - t_sw_array[1]],
-                                           requires_grad=True,
-                                           device=self.device,
-                                           dtype=self.torch_type)
-        exp_sw1, exp_sw2, exp_sw3 = (torch.empty((0, 3),
-                                                 requires_grad=True,
-                                                 device=self.device,
-                                                 dtype=self.torch_type),
-                                     torch.empty((0, 3),
-                                                 requires_grad=True,
-                                                 device=self.device,
-                                                 dtype=self.torch_type),
-                                     torch.empty((0, 3),
-                                                 requires_grad=True,
-                                                 device=self.device,
-                                                 dtype=self.torch_type))
-        if tau_list is None:
-            if model == 0:
-                if switch >= 1:
-                    exp_sw1 = self.predict_exp_ten(tau_sw1, 0, 0, 0, alpha_c,
-                                                   alpha, beta, gamma,
-                                                   pred_r=False,
-                                                   scale_cc=scale_cc,
-                                                   rna_only=rna_only)
-                    if switch >= 2:
-                        exp_sw2 = self.predict_exp_ten(tau_sw2, exp_sw1[0, 0],
-                                                       exp_sw1[0, 1],
-                                                       exp_sw1[0, 2],
-                                                       alpha_c, alpha, beta,
-                                                       gamma, pred_r=False,
-                                                       chrom_open=False,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-                        if switch >= 3:
-                            exp_sw3 = self.predict_exp_ten(tau_sw3,
-                                                           exp_sw2[0, 0],
-                                                           exp_sw2[0, 1],
-                                                           exp_sw2[0, 2],
-                                                           alpha_c, alpha,
-                                                           beta, gamma,
-                                                           chrom_open=False,
-                                                           scale_cc=scale_cc,
-                                                           rna_only=rna_only)
-            elif model == 1:
-                if switch >= 1:
-                    exp_sw1 = self.predict_exp_ten(tau_sw1, 0, 0, 0, alpha_c,
-                                                   alpha, beta, gamma,
-                                                   pred_r=False,
-                                                   scale_cc=scale_cc,
-                                                   rna_only=rna_only)
-                    if switch >= 2:
-                        exp_sw2 = self.predict_exp_ten(tau_sw2, exp_sw1[0, 0],
-                                                       exp_sw1[0, 1],
-                                                       exp_sw1[0, 2],
-                                                       alpha_c, alpha,
-                                                       beta, gamma,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-                        if switch >= 3:
-                            exp_sw3 = self.predict_exp_ten(tau_sw3,
-                                                           exp_sw2[0, 0],
-                                                           exp_sw2[0, 1],
-                                                           exp_sw2[0, 2],
-                                                           alpha_c, alpha,
-                                                           beta, gamma,
-                                                           chrom_open=False,
-                                                           scale_cc=scale_cc,
-                                                           rna_only=rna_only)
-            elif model == 2:
-                if switch >= 1:
-                    exp_sw1 = self.predict_exp_ten(tau_sw1, 0, 0, 0, alpha_c,
-                                                   alpha, beta, gamma,
-                                                   pred_r=False,
-                                                   scale_cc=scale_cc,
-                                                   rna_only=rna_only)
-                    if switch >= 2:
-                        exp_sw2 = self.predict_exp_ten(tau_sw2, exp_sw1[0, 0],
-                                                       exp_sw1[0, 1],
-                                                       exp_sw1[0, 2], alpha_c,
-                                                       alpha, beta, gamma,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-                        if switch >= 3:
-                            exp_sw3 = self.predict_exp_ten(tau_sw3,
-                                                           exp_sw2[0, 0],
-                                                           exp_sw2[0, 1],
-                                                           exp_sw2[0, 2],
-                                                           alpha_c, 0, beta,
-                                                           gamma,
-                                                           scale_cc=scale_cc,
-                                                           rna_only=rna_only)
-
-            return [torch.empty((0, 3), requires_grad=True,
-                                device=self.device,
-                                dtype=self.torch_type),
-                    torch.empty((0, 3), requires_grad=True,
-                                device=self.device,
-                                dtype=self.torch_type),
-                    torch.empty((0, 3), requires_grad=True,
-                                device=self.device,
-                                dtype=self.torch_type),
-                    torch.empty((0, 3), requires_grad=True,
-                                device=self.device,
-                                dtype=self.torch_type)], \
-                   [exp_sw1, exp_sw2, exp_sw3]
-
-        tau1 = tau_list[0]
-        if switch >= 1:
-            tau2 = tau_list[1]
-            if switch >= 2:
-                tau3 = tau_list[2]
-                if switch == 3:
-                    tau4 = tau_list[3]
-        exp1, exp2, exp3, exp4 = (torch.empty((0, 3), requires_grad=True,
-                                              device=self.device,
-                                              dtype=self.torch_type),
-                                  torch.empty((0, 3), requires_grad=True,
-                                              device=self.device,
-                                              dtype=self.torch_type),
-                                  torch.empty((0, 3), requires_grad=True,
-                                              device=self.device,
-                                              dtype=self.torch_type),
-                                  torch.empty((0, 3), requires_grad=True,
-                                              device=self.device,
-                                              dtype=self.torch_type))
-        if model == 0:
-            exp1 = self.predict_exp_ten(tau1, 0, 0, 0, alpha_c, alpha, beta,
-                                        gamma, pred_r=False, scale_cc=scale_cc,
-                                        rna_only=rna_only)
-            if switch >= 1:
-                exp_sw1 = self.predict_exp_ten(tau_sw1, 0, 0, 0, alpha_c,
-                                               alpha, beta, gamma,
-                                               pred_r=False, scale_cc=scale_cc,
-                                               rna_only=rna_only)
-                exp2 = self.predict_exp_ten(tau2, exp_sw1[0, 0], exp_sw1[0, 1],
-                                            exp_sw1[0, 2], alpha_c, alpha,
-                                            beta, gamma, pred_r=False,
-                                            chrom_open=False,
-                                            scale_cc=scale_cc,
-                                            rna_only=rna_only)
-                if switch >= 2:
-                    exp_sw2 = self.predict_exp_ten(tau_sw2, exp_sw1[0, 0],
-                                                   exp_sw1[0, 1],
-                                                   exp_sw1[0, 2],
-                                                   alpha_c, alpha, beta, gamma,
-                                                   pred_r=False,
-                                                   chrom_open=False,
-                                                   scale_cc=scale_cc,
-                                                   rna_only=rna_only)
-                    exp3 = self.predict_exp_ten(tau3, exp_sw2[0, 0],
-                                                exp_sw2[0, 1], exp_sw2[0, 2],
-                                                alpha_c, alpha, beta, gamma,
-                                                chrom_open=False,
-                                                scale_cc=scale_cc,
-                                                rna_only=rna_only)
-                    if switch == 3:
-                        exp_sw3 = self.predict_exp_ten(tau_sw3, exp_sw2[0, 0],
-                                                       exp_sw2[0, 1],
-                                                       exp_sw2[0, 2],
-                                                       alpha_c, alpha, beta,
-                                                       gamma,
-                                                       chrom_open=False,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-                        exp4 = self.predict_exp_ten(tau4, exp_sw3[0, 0],
-                                                    exp_sw3[0, 1],
-                                                    exp_sw3[0, 2],
-                                                    alpha_c, 0, beta, gamma,
-                                                    chrom_open=False,
-                                                    scale_cc=scale_cc,
-                                                    rna_only=rna_only)
-        elif model == 1:
-            exp1 = self.predict_exp_ten(tau1, 0, 0, 0, alpha_c, alpha, beta,
-                                        gamma, pred_r=False, scale_cc=scale_cc,
-                                        rna_only=rna_only)
-            if switch >= 1:
-                exp_sw1 = self.predict_exp_ten(tau_sw1, 0, 0, 0, alpha_c,
-                                               alpha, beta, gamma,
-                                               pred_r=False, scale_cc=scale_cc,
-                                               rna_only=rna_only)
-                exp2 = self.predict_exp_ten(tau2, exp_sw1[0, 0], exp_sw1[0, 1],
-                                            exp_sw1[0, 2], alpha_c, alpha,
-                                            beta, gamma, scale_cc=scale_cc,
-                                            rna_only=rna_only)
-                if switch >= 2:
-                    exp_sw2 = self.predict_exp_ten(tau_sw2, exp_sw1[0, 0],
-                                                   exp_sw1[0, 1],
-                                                   exp_sw1[0, 2], alpha_c,
-                                                   alpha, beta, gamma,
-                                                   scale_cc=scale_cc,
-                                                   rna_only=rna_only)
-                    exp3 = self.predict_exp_ten(tau3, exp_sw2[0, 0],
-                                                exp_sw2[0, 1], exp_sw2[0, 2],
-                                                alpha_c, alpha, beta, gamma,
-                                                chrom_open=False,
-                                                scale_cc=scale_cc,
-                                                rna_only=rna_only)
-                    if switch == 3:
-                        exp_sw3 = self.predict_exp_ten(tau_sw3, exp_sw2[0, 0],
-                                                       exp_sw2[0, 1],
-                                                       exp_sw2[0, 2],
-                                                       alpha_c, alpha, beta,
-                                                       gamma,
-                                                       chrom_open=False,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-                        exp4 = self.predict_exp_ten(tau4, exp_sw3[0, 0],
-                                                    exp_sw3[0, 1],
-                                                    exp_sw3[0, 2], alpha_c, 0,
-                                                    beta, gamma,
-                                                    chrom_open=False,
-                                                    scale_cc=scale_cc,
-                                                    rna_only=rna_only)
-        elif model == 2:
-            exp1 = self.predict_exp_ten(tau1, 0, 0, 0, alpha_c, alpha, beta,
-                                        gamma, pred_r=False, scale_cc=scale_cc,
-                                        rna_only=rna_only)
-            if switch >= 1:
-                exp_sw1 = self.predict_exp_ten(tau_sw1, 0, 0, 0, alpha_c,
-                                               alpha, beta, gamma,
-                                               pred_r=False, scale_cc=scale_cc,
-                                               rna_only=rna_only)
-                exp2 = self.predict_exp_ten(tau2, exp_sw1[0, 0], exp_sw1[0, 1],
-                                            exp_sw1[0, 2], alpha_c, alpha,
-                                            beta, gamma, scale_cc=scale_cc,
-                                            rna_only=rna_only)
-                if switch >= 2:
-                    exp_sw2 = self.predict_exp_ten(tau_sw2, exp_sw1[0, 0],
-                                                   exp_sw1[0, 1],
-                                                   exp_sw1[0, 2], alpha_c,
-                                                   alpha, beta, gamma,
-                                                   scale_cc=scale_cc,
-                                                   rna_only=rna_only)
-                    exp3 = self.predict_exp_ten(tau3, exp_sw2[0, 0],
-                                                exp_sw2[0, 1],
-                                                exp_sw2[0, 2], alpha_c, 0,
-                                                beta, gamma, scale_cc=scale_cc,
-                                                rna_only=rna_only)
-                    if switch == 3:
-                        exp_sw3 = self.predict_exp_ten(tau_sw3, exp_sw2[0, 0],
-                                                       exp_sw2[0, 1],
-                                                       exp_sw2[0, 2],
-                                                       alpha_c, 0, beta, gamma,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-                        exp4 = self.predict_exp_ten(tau4, exp_sw3[0, 0],
-                                                    exp_sw3[0, 1],
-                                                    exp_sw3[0, 2],
-                                                    alpha_c, 0, beta, gamma,
-                                                    chrom_open=False,
-                                                    scale_cc=scale_cc,
-                                                    rna_only=rna_only)
-        return [exp1, exp2, exp3, exp4], [exp_sw1, exp_sw2, exp_sw3]
-
     def check_partial_trajectory(self, fit_gmm=True, fit_slope=True,
                                  determine_model=True):
         w_non_zero = ((self.c >= 0.1 * np.max(self.c)) &
@@ -2175,11 +1102,12 @@ class ChromatinDynamical:
         if np.sum(w_low) < 10:
             fit_gmm = False
             self.partial = True
-        if self.local_std is None:
-            logg.warn('local standard deviation not provided. '
-                      'Skipping GMM..', v=2)
-        if self.embed_coord is None:
-            logg.warn('Warning: embedded coordinates not provided. '
+        if self.verbose >= 2:
+            if self.local_std is None:
+                print('Warning: local standard deviation not provided. '
+                      'Skipping GMM..')
+            if self.embed_coord is None:
+                print('Warning: embedded coordinates not provided. '
                       'Skipping GMM..')
         if (fit_gmm and self.local_std is not None and self.embed_coord
                 is not None):
@@ -2192,17 +1120,19 @@ class ChromatinDynamical:
                                     random_state=2021).fit(dists)
             mean_diff = np.abs(model.means_[1][0] - model.means_[0][0])
             criterion1 = mean_diff > self.local_std / self.tm
-            logg.update(f'GMM: difference between means = {mean_diff}, '
-                        f'threshold = {self.local_std / self.tm}.', v=2)
+            if self.verbose >= 2:
+                print(f'GMM: difference between means = {mean_diff}, '
+                      'threshold = {self.local_std / self.tm}.')
             criterion2 = np.all(model.weights_[1] > 0.2 / self.tm)
-            logg.update('GMM: weight of the second Gaussian ='
-                        f' {model.weights_[1]}.', v=2)
+            if self.verbose >= 2:
+                print('GMM: weight of the second Gaussian ='
+                      f' {model.weights_[1]}.')
             if criterion1 and criterion2:
                 self.partial = False
             else:
                 self.partial = True
-            logg.update(f'GMM decides {"" if self.partial else "not "}'
-                        'partial.', v=2)
+            if self.verbose >= 2:
+                print(f'GMM decides {"" if self.partial else "not "}partial.')
 
         # steady-state slope
         wu = self.u >= np.percentile(u_non_zero, 95)
@@ -2239,15 +1169,16 @@ class ChromatinDynamical:
             off_ = slope_ < gamma
             on_dist = np.sum((u_non_zero[on_] - gamma * s_non_zero[on_])**2)
             off_dist = np.sum((gamma * s_non_zero[off_] - u_non_zero[off_])**2)
-            logg.update(f'Slope: SSE on induction phase = {on_dist},'
-                        f' SSE on repression phase = {off_dist}.', v=2)
+            if self.verbose >= 2:
+                print(f'Slope: SSE on induction phase = {on_dist},'
+                      f' SSE on repression phase = {off_dist}.')
             if self.thickness < 1.5 / np.sqrt(self.tm):
                 narrow = True
             else:
                 narrow = False
-            logg.update(f'Thickness of trajectory = {self.thickness}. '
-                        f'Trajectory is {"narrow" if narrow else "normal"}.',
-                        v=2)
+            if self.verbose >= 2:
+                print(f'Thickness of trajectory = {self.thickness}. '
+                      'Trajectory is {"narrow" if narrow else "normal"}.')
             if on_dist > 10 * self.tm**2 * off_dist:
                 self.direction = 'on'
                 self.partial = True
@@ -2301,14 +1232,12 @@ class ChromatinDynamical:
         if determine_model:
             self.model = self.model_
 
-        if not self.known_pars:
+        if self.verbose >= 1 and not self.known_pars:
             if fit_gmm or fit_slope:
-                logg.update(f'predicted partial trajectory: {self.partial}',
-                            v=1)
-                logg.update('predicted trajectory direction:'
-                            f'{self.direction}', v=1)
+                print(f'predicted partial trajectory: {self.partial}')
+                print(f'predicted trajectory direction: {self.direction}')
             if determine_model:
-                logg.update(f'predicted model: {self.model}', v=1)
+                print(f'predicted model: {self.model}')
 
     def initialize_steady_state_params(self, model_mismatch=False):
         self.scale_cc = 1.0
@@ -2510,12 +1439,10 @@ class ChromatinDynamical:
                                     + self.params[2]])
         self.t_sw_1, self.t_sw_2, self.t_sw_3 = self.t_sw_array
 
-        logg.update(f'initial params:\nswitch time array = {self.t_sw_array},'
-                    '\n'
-                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
-                    f'c rescale factor = {self.rescale_c},\n'
-                    f'u rescale factor = {self.rescale_u}', v=1)
-        logg.update(f'initial loss: {self.loss[-1]}', v=1)
+        if self.verbose >= 1:
+            print(f'initial params: {self.t_sw_array} {self.rates} '
+                  '{self.rescale_c} {self.rescale_u}')
+            print(f'initial loss: {self.loss[-1]}')
 
     def fit(self):
         if self.low_quality:
@@ -2553,8 +1480,8 @@ class ChromatinDynamical:
             if last_t_sw > np.max(self.t):
                 gap_sum += 20 - last_t_sw
             realign_ratio = np.clip(20/(20 - gap_sum), None, 20/last_t_sw)
-            logg.update(f'removing gaps and realigning by {realign_ratio}..',
-                        v=1)
+            if self.verbose >= 1:
+                print(f'removing gaps and realigning by {realign_ratio}..')
             self.rates /= realign_ratio
             self.alpha_c, self.alpha, self.beta, self.gamma = self.rates
             self.params[:3] *= realign_ratio
@@ -2572,7 +1499,8 @@ class ChromatinDynamical:
             plt.show(block=True)
 
         # likelihood
-        logg.update('computing likelihood..', v=1)
+        if self.verbose >= 1:
+            print('computing likelihood..')
         keep = self.non_zero & self.non_outlier & \
             (self.u_all > 0.2 * np.percentile(self.u_all, 99.5)) & \
             (self.s_all > 0.2 * np.percentile(self.s_all, 99.5))
@@ -2601,15 +1529,14 @@ class ChromatinDynamical:
         else:
             self.likelihood, self.l_c, self.ssd_c, self.var_c, l_u = \
                 0, 0, 0, 0, 0
-            # TODO: Keep? Remove??
-            l_s = 0
 
-        if not self.rna_only:
-            logg.update(f'likelihood of c: {self.l_c}, likelihood of u: {l_u},'
-                        f' likelihood of s: {l_s}', v=1)
+        if not self.rna_only and self.verbose >= 1:
+            print(f'likelihood of c: {self.l_c}, likelihood of u: {l_u}, '
+                  'likelihood of s: {l_s}')
 
         # velocity
-        logg.update('computing velocities..', v=1)
+        if self.verbose >= 1:
+            print('computing velocities..')
         self.velocity = np.empty((len(self.u_all), 3))
         if self.conn is not None:
             new_time = self.conn.dot(self.t)
@@ -2624,8 +1551,6 @@ class ChromatinDynamical:
             new_time = self.t
             new_state = self.state
 
-        self.alpha_c, self.alpha, self.beta, self.gamma = \
-            check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(new_time,
                                       self.t_sw_array,
                                       new_state,
@@ -2649,10 +1574,6 @@ class ChromatinDynamical:
         switch = np.sum(self.t_sw_array < 20)
         typed_tau_list = List()
         [typed_tau_list.append(x) for x in tau_list]
-        self.alpha_c, self.alpha, self.beta, self.gamma, \
-            self.c0, self.u0, self.s0 = \
-            check_params(self.alpha_c, self.alpha, self.beta, self.gamma,
-                         c0=self.c0, u0=self.u0, s0=self.s0)
         exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                              self.t_sw_array[:switch],
                                              self.alpha_c,
@@ -2677,8 +1598,6 @@ class ChromatinDynamical:
                                         for x in range(switch)]))
         s_sw = np.ravel(np.concatenate([exp_sw_list[x][:, 2]
                                         for x in range(switch)]))
-        self.alpha_c, self.alpha, self.beta, self.gamma = \
-            check_params(self.alpha_c, self.alpha, self.beta, self.gamma)
         vc, vu, vs = compute_velocity(anchor_time,
                                       self.t_sw_array,
                                       None,
@@ -2717,122 +1636,19 @@ class ChromatinDynamical:
         self.anchor_velo_max_idx = np.sum(anchor_time < np.max(new_time)) - 1
 
         if self.save_plot:
-            logg.update('saving plots..', v=1)
+            if self.verbose >= 1:
+                print('saving plots..')
             self.save_dyn_plot(c_, u_, s_, c_sw_, u_sw_, s_sw_, tau_list)
 
         self.realign_time_and_velocity(c, u, s, anchor_time)
 
-        logg.update(f'final params:\nswitch time array = {self.t_sw_array},\n'
-                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
-                    f'c rescale factor = {self.rescale_c},\n'
-                    f'u rescale factor = {self.rescale_u}',
-                    v=1)
-        logg.update(f'final loss: {self.loss[-1]}', v=1)
-        logg.update(f'final likelihood: {self.likelihood}', v=1)
+        if self.verbose >= 1:
+            print(f'final params: {self.t_sw_array} {self.rates} '
+                  '{self.scale_cc} {self.rescale_c} {self.rescale_u}')
+            print(f'final loss: {self.loss[-1]}')
+            print(f'final likelihood: {self.likelihood}')
 
         return self.loss
-
-    # the adam algorithm
-    # NOTE: The starting point for this function was an excample on the
-    # GeeksForGeeks website. The particular article is linked below:
-    # www.geeksforgeeks.org/how-to-implement-adam-gradient-descent-from-scratch-using-python/
-    def AdamMin(self, x, n_iter, tol, eps=1e-8):
-
-        n = len(x)
-
-        x_ten = torch.tensor(x, requires_grad=True, device=self.device,
-                             dtype=self.torch_type)
-
-        # record lowest loss as a benchmark
-        # (right now the lowest loss is the current loss)
-        lowest_loss = torch.tensor(np.array(self.loss[-1], dtype=self.u.dtype),
-                                   device=self.device,
-                                   dtype=self.torch_type)
-
-        # record the tensor of the parameters that cause the lowest loss
-        lowest_x_ten = x_ten
-
-        # the m and v variables used in the adam calculations
-        m = torch.zeros(n, device=self.device, requires_grad=True,
-                        dtype=self.torch_type)
-        v = torch.zeros(n, device=self.device, requires_grad=True,
-                        dtype=self.torch_type)
-
-        # the update amount to add to the x tensor after the appropriate
-        # calculations are made
-        u = torch.ones(n, device=self.device, requires_grad=True,
-                       dtype=self.torch_type) * float("inf")
-
-        # how many times the new loss is lower than the lowest loss
-        update_count = 0
-
-        iterations = 0
-
-        # run the gradient descent updates
-        for t in range(n_iter):
-
-            iterations += 1
-
-            # calculate the loss
-            loss = self.mse_ten(x_ten)
-
-            # if the loss is lower than the lowest loss...
-            if loss < lowest_loss:
-
-                # record the new best tensor
-                lowest_x_ten = x_ten
-                update_count += 1
-
-                # if the percentage difference in x tensors and loss values
-                # is less than the tolerance parameter and we've update the
-                # loss 3 times by now...
-                if torch.all((torch.abs(u) / lowest_x_ten) < tol) and \
-                    (torch.abs(loss - lowest_loss) / lowest_loss) < tol and \
-                        update_count >= 3:
-
-                    # ...we've updated enough. Break!
-                    break
-
-                # record the new lowest loss
-                lowest_loss = loss
-
-            # take the gradient of mse w/r/t our current parameter values
-            loss.backward(inputs=x_ten)
-            g = x_ten.grad
-
-            # calculate the new update value using the Adam formula
-            m = (self.adam_beta1 * m) + ((1.0 - self.adam_beta1) * g)
-            v = (self.adam_beta2 * v) + ((1.0 - self.adam_beta2) * g * g)
-
-            mhat = m / (1.0 - (self.adam_beta1**(t+1)))
-            vhat = v / (1.0 - (self.adam_beta2**(t+1)))
-
-            u = -(self.adam_lr * mhat) / (torch.sqrt(vhat) + eps)
-
-            # update the x tensor
-            x_ten = x_ten + u
-
-        # as long as we've found at least one better x tensor...
-        if update_count > 1:
-
-            # record the final lowest loss
-            if loss < lowest_loss:
-                lowest_loss = loss
-
-            # set the new loss for the gene to the new lowest loss
-            self.cur_loss = lowest_loss.item()
-
-            # use the update() function so the gene's parameters
-            # are the new best one we found
-            updated = self.update(lowest_x_ten.cpu().detach().numpy())
-
-        # if we never found a better x tensor, then the return value should
-        # state that we did not update it
-        else:
-            updated = False
-
-        # return whether we updated the x tensor or not
-        return updated
 
     def fit_dyn(self):
 
@@ -2841,7 +1657,8 @@ class ChromatinDynamical:
 
             # RNA-only
             if self.rna_only:
-                logg.update('Nelder Mead on t_sw_2 and alpha..', v=2)
+                if self.verbose >= 2:
+                    print('Nelder Mead on t_sw_2 and alpha..')
                 self.fitting_flag_ = 0
                 if self.cur_iter == 1:
                     var_test = (self.alpha +
@@ -2857,8 +1674,8 @@ class ChromatinDynamical:
                                callback=self.update, options={'maxiter': 3})
 
                 if self.fit_rescale:
-                    logg.update('Nelder Mead on t_sw_2, beta, and rescale u..',
-                                v=2)
+                    if self.verbose >= 2:
+                        print('Nelder Mead on t_sw_2, beta, and rescale u..')
                     res = minimize(self.mse, x0=[self.params[1],
                                                  self.params[5],
                                                  self.params[9]],
@@ -2866,18 +1683,21 @@ class ChromatinDynamical:
                                    callback=self.update,
                                    options={'maxiter': 5})
 
-                logg.update('Nelder Mead on alpha and gamma..', v=2)
+                if self.verbose >= 2:
+                    print('Nelder Mead on alpha and gamma..')
                 self.fitting_flag_ = 1
                 res = minimize(self.mse, x0=[self.params[4], self.params[6]],
                                method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 3})
 
-                logg.update('Nelder Mead on t_sw_2..', v=2)
+                if self.verbose >= 2:
+                    print('Nelder Mead on t_sw_2..')
                 res = minimize(self.mse, x0=[self.params[1]],
                                method='Nelder-Mead', tol=1e-2,
                                callback=self.update, options={'maxiter': 2})
 
-                logg.update('Full Nelder Mead..', v=2)
+                if self.verbose >= 2:
+                    print('Full Nelder Mead..')
                 res = minimize(self.mse, x0=[self.params[1], self.params[4],
                                              self.params[5], self.params[6]],
                                method='Nelder-Mead', tol=1e-2,
@@ -2885,115 +1705,102 @@ class ChromatinDynamical:
 
             # chromatin-RNA
             else:
-
-                if not self.adam:
-                    logg.update('Nelder Mead on t_sw_1, chromatin switch time,'
-                                'and alpha_c..', v=2)
-                    self.fitting_flag_ = 1
-                    if self.cur_iter == 1:
-                        var_test = (self.gamma + np.array([-1, -0.5, 0.5, 1])
-                                    * 0.1 * self.gamma)
-                        new_params = self.params.copy()
-                        for var in var_test:
-                            new_params[6] = var
-                            self.update(new_params, adjust_time=False)
-                    if self.model == 0 or self.model == 1:
-                        res = minimize(self.mse, x0=[self.params[0],
-                                                     self.params[1],
-                                                     self.params[3]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 20})
-                    elif self.model == 2:
-                        res = minimize(self.mse, x0=[self.params[0],
-                                                     self.params[2],
-                                                     self.params[3]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 20})
-
-                    logg.update('Nelder Mead on chromatin switch time,'
-                                'chromatin closing rate scaling, and rescale'
-                                'c..', v=2)
-                    self.fitting_flag_ = 2
-                    if self.model == 0 or self.model == 1:
-                        res = minimize(self.mse, x0=[self.params[1],
-                                                     self.params[7],
-                                                     self.params[8]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 20})
-                    elif self.model == 2:
-                        res = minimize(self.mse, x0=[self.params[2],
-                                                     self.params[7],
-                                                     self.params[8]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 20})
-
-                    logg.update('Nelder Mead on rna switch time and alpha..',
-                                v=2)
-                    self.fitting_flag_ = 1
-                    if self.model == 0 or self.model == 1:
-                        res = minimize(self.mse, x0=[self.params[2],
-                                                     self.params[4]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 10})
-                    elif self.model == 2:
-                        res = minimize(self.mse, x0=[self.params[1],
-                                                     self.params[4]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 10})
-
-                    logg.update('Nelder Mead on rna switch time, beta, and '
-                                'rescale u..', v=2)
-                    self.fitting_flag_ = 3
-                    if self.model == 0 or self.model == 1:
-                        res = minimize(self.mse, x0=[self.params[2],
-                                                     self.params[5],
-                                                     self.params[9]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 20})
-                    elif self.model == 2:
-                        res = minimize(self.mse, x0=[self.params[1],
-                                                     self.params[5],
-                                                     self.params[9]],
-                                       method='Nelder-Mead', tol=1e-2,
-                                       callback=self.update,
-                                       options={'maxiter': 20})
-
-                    logg.update('Nelder Mead on alpha and gamma..', v=2)
-                    self.fitting_flag_ = 2
-                    res = minimize(self.mse, x0=[self.params[4],
-                                                 self.params[6]],
+                if self.verbose >= 2:
+                    print('Nelder Mead on t_sw_1, chromatin switch time, and '
+                          'alpha_c..')
+                self.fitting_flag_ = 1
+                if self.cur_iter == 1:
+                    var_test = (self.gamma + np.array([-1, -0.5, 0.5, 1])
+                                * 0.1 * self.gamma)
+                    new_params = self.params.copy()
+                    for var in var_test:
+                        new_params[6] = var
+                        self.update(new_params, adjust_time=False)
+                if self.model == 0 or self.model == 1:
+                    res = minimize(self.mse, x0=[self.params[0],
+                                                 self.params[1],
+                                                 self.params[3]],
                                    method='Nelder-Mead', tol=1e-2,
                                    callback=self.update,
-                                   options={'maxiter': 10})
-
-                    logg.update('Nelder Mead on t_sw..', v=2)
-                    self.fitting_flag_ = 4
-                    res = minimize(self.mse, x0=self.params[:3],
+                                   options={'maxiter': 20})
+                elif self.model == 2:
+                    res = minimize(self.mse, x0=[self.params[0],
+                                                 self.params[2],
+                                                 self.params[3]],
                                    method='Nelder-Mead', tol=1e-2,
                                    callback=self.update,
                                    options={'maxiter': 20})
 
-                else:
-
-                    logg.update('Adam on all parameters', v=2)
-                    self.AdamMin(np.array(self.params, dtype=self.u.dtype), 20,
-                                 tol=1e-2)
-
-                    logg.update('Nelder Mead on t_sw..', v=2)
-                    self.fitting_flag_ = 4
-                    res = minimize(self.mse, x0=self.params[:3],
+                if self.verbose >= 2:
+                    print('Nelder Mead on chromatin switch time, chromatin '
+                          'closing rate scaling, and rescale c..')
+                self.fitting_flag_ = 2
+                if self.model == 0 or self.model == 1:
+                    res = minimize(self.mse, x0=[self.params[1],
+                                                 self.params[7],
+                                                 self.params[8]],
                                    method='Nelder-Mead', tol=1e-2,
                                    callback=self.update,
-                                   options={'maxiter': 15})
+                                   options={'maxiter': 20})
+                elif self.model == 2:
+                    res = minimize(self.mse, x0=[self.params[2],
+                                                 self.params[7],
+                                                 self.params[8]],
+                                   method='Nelder-Mead', tol=1e-2,
+                                   callback=self.update,
+                                   options={'maxiter': 20})
 
-            logg.update(f'iteration {self.cur_iter} finished', v=2)
+                if self.verbose >= 2:
+                    print('Nelder Mead on rna switch time and alpha..')
+                self.fitting_flag_ = 1
+                if self.model == 0 or self.model == 1:
+                    res = minimize(self.mse, x0=[self.params[2],
+                                                 self.params[4]],
+                                   method='Nelder-Mead', tol=1e-2,
+                                   callback=self.update,
+                                   options={'maxiter': 10})
+                elif self.model == 2:
+                    res = minimize(self.mse, x0=[self.params[1],
+                                                 self.params[4]],
+                                   method='Nelder-Mead', tol=1e-2,
+                                   callback=self.update,
+                                   options={'maxiter': 10})
+
+                if self.verbose >= 2:
+                    print('Nelder Mead on rna switch time, beta, and '
+                          'rescale u..')
+                self.fitting_flag_ = 3
+                if self.model == 0 or self.model == 1:
+                    res = minimize(self.mse, x0=[self.params[2],
+                                                 self.params[5],
+                                                 self.params[9]],
+                                   method='Nelder-Mead', tol=1e-2,
+                                   callback=self.update,
+                                   options={'maxiter': 20})
+                elif self.model == 2:
+                    res = minimize(self.mse, x0=[self.params[1],
+                                                 self.params[5],
+                                                 self.params[9]],
+                                   method='Nelder-Mead', tol=1e-2,
+                                   callback=self.update,
+                                   options={'maxiter': 20})
+
+                if self.verbose >= 2:
+                    print('Nelder Mead on alpha and gamma..')
+                self.fitting_flag_ = 2
+                res = minimize(self.mse, x0=[self.params[4], self.params[6]],
+                               method='Nelder-Mead', tol=1e-2,
+                               callback=self.update, options={'maxiter': 10})
+
+                if self.verbose >= 2:
+                    print('Nelder Mead on t_sw..')
+                self.fitting_flag_ = 4
+                res = minimize(self.mse, x0=self.params[:3],
+                               method='Nelder-Mead', tol=1e-2,
+                               callback=self.update, options={'maxiter': 20})
+
+            if self.verbose >= 2:
+                print(f'iteration {self.cur_iter} finished')
 
     def _variables(self, x):
         scale_cc = self.scale_cc
@@ -3039,7 +1846,6 @@ class ChromatinDynamical:
 
         # chromatin-RNA
         else:
-
             if len(x) == 2:
                 if self.fitting_flag_ == 1:  # fit rna switch time and alpha
                     if self.model == 0 or self.model == 1:
@@ -3100,7 +1906,7 @@ class ChromatinDynamical:
                 return
 
         # clip to meaningful values
-        if self.fitting_flag_ and not self.adam:
+        if self.fitting_flag_:
             scale_cc = np.clip(scale_cc,
                                np.max([0.5*self.scale_cc, 0.25]),
                                np.min([2*self.scale_cc, 4]))
@@ -3116,476 +1922,6 @@ class ChromatinDynamical:
             rescale_u = np.clip(rescale_u, 0.2, 3)
 
         return t3, r4, scale_cc, rescale_c, rescale_u
-
-    # the tensor version of the calculate_dist_and_time function
-    def calculate_dist_and_time_ten(self,
-                                    c, u, s,
-                                    t_sw_array,
-                                    alpha_c, alpha, beta, gamma,
-                                    rescale_c, rescale_u,
-                                    scale_cc=1,
-                                    scale_factor=None,
-                                    model=1,
-                                    conn=None,
-                                    t=1000, k=1,
-                                    direction='complete',
-                                    total_h=20,
-                                    rna_only=False,
-                                    penalize_gap=True,
-                                    all_cells=True):
-
-        conn = torch.tensor(conn.todense(),
-                            device=self.device,
-                            dtype=self.torch_type)
-
-        c_ten = torch.tensor(c, device=self.device, dtype=self.torch_type)
-        u_ten = torch.tensor(u, device=self.device, dtype=self.torch_type)
-        s_ten = torch.tensor(s, device=self.device, dtype=self.torch_type)
-
-        n = len(u)
-        if scale_factor is None:
-            scale_factor_ten = torch.stack((torch.std(c_ten), torch.std(u_ten),
-                                            torch.std(s_ten)))
-        else:
-            scale_factor_ten = torch.tensor(scale_factor, device=self.device,
-                                            dtype=self.torch_type)
-
-        tau_list = self.anchor_points_ten(t_sw_array, total_h, t)
-
-        switch = torch.sum(t_sw_array < total_h)
-
-        exp_list, exp_sw_list = self.generate_exp_tens(tau_list,
-                                                       t_sw_array[:switch],
-                                                       alpha_c,
-                                                       alpha,
-                                                       beta,
-                                                       gamma,
-                                                       model=model,
-                                                       scale_cc=scale_cc,
-                                                       rna_only=rna_only)
-
-        rescale_factor = torch.stack((rescale_c, rescale_u,
-                                     torch.tensor(1.0, device=self.device,
-                                                  requires_grad=True,
-                                                  dtype=self.torch_type)))
-
-        for i in range(len(exp_list)):
-            exp_list[i] = exp_list[i]*rescale_factor
-
-            if i < len(exp_list)-1:
-                exp_sw_list[i] = exp_sw_list[i]*rescale_factor
-
-        max_c = 0
-        max_u = 0
-        max_s = 0
-
-        if rna_only:
-            exp_mat = (torch.hstack((torch.reshape(u_ten, (-1, 1)),
-                                     torch.reshape(s_ten, (-1, 1))))
-                       / scale_factor_ten[1:])
-        else:
-            exp_mat = torch.hstack((torch.reshape(c_ten, (-1, 1)),
-                                    torch.reshape(u_ten, (-1, 1)),
-                                    torch.reshape(s_ten, (-1, 1))))\
-                                    / scale_factor_ten
-
-        taus = torch.zeros((1, n), device=self.device,
-                           requires_grad=True,
-                           dtype=self.torch_type)
-        anchor_exp, anchor_t = None, None
-
-        dists0 = torch.full((1, n), 0.0 if direction == "on"
-                            or direction == "complete" else np.inf,
-                            device=self.device,
-                            requires_grad=True,
-                            dtype=self.torch_type)
-        dists1 = torch.full((1, n), 0.0 if direction == "on"
-                            or direction == "complete" else np.inf,
-                            device=self.device,
-                            requires_grad=True,
-                            dtype=self.torch_type)
-        dists2 = torch.full((1, n), 0.0 if direction == "off"
-                            or direction == "complete" else np.inf,
-                            device=self.device,
-                            requires_grad=True,
-                            dtype=self.torch_type)
-        dists3 = torch.full((1, n), 0.0 if direction == "off"
-                            or direction == "complete" else np.inf,
-                            device=self.device,
-                            requires_grad=True,
-                            dtype=self.torch_type)
-
-        ts0 = torch.zeros((1, n), device=self.device,
-                          requires_grad=True,
-                          dtype=self.torch_type)
-        ts1 = torch.zeros((1, n), device=self.device,
-                          requires_grad=True,
-                          dtype=self.torch_type)
-        ts2 = torch.zeros((1, n), device=self.device,
-                          requires_grad=True,
-                          dtype=self.torch_type)
-        ts3 = torch.zeros((1, n), device=self.device,
-                          requires_grad=True,
-                          dtype=self.torch_type)
-
-        for i in range(switch+1):
-
-            if not all_cells:
-                max_ci = (torch.max(exp_list[i][:, 0])
-                          if exp_list[i].shape[0] > 0
-                          else 0)
-                max_c = max_ci if max_ci > max_c else max_c
-            max_ui = torch.max(exp_list[i][:, 1]) if exp_list[i].shape[0] > 0 \
-                else 0
-            max_u = max_ui if max_ui > max_u else max_u
-            max_si = torch.max(exp_list[i][:, 2]) if exp_list[i].shape[0] > 0 \
-                else 0
-            max_s = max_si if max_si > max_s else max_s
-
-            skip_phase = False
-            if direction == 'off':
-                if (model in [1, 2]) and (i < 2):
-                    skip_phase = True
-            elif direction == 'on':
-                if (model in [1, 2]) and (i >= 2):
-                    skip_phase = True
-            if rna_only and i == 0:
-                skip_phase = True
-
-            if not skip_phase:
-                if rna_only:
-                    tmp = exp_list[i][:, 1:] / scale_factor_ten[1:]
-                else:
-                    tmp = exp_list[i] / scale_factor_ten
-                if anchor_exp is None:
-                    anchor_exp = exp_list[i]
-                    anchor_t = (tau_list[i] + t_sw_array[i-1] if i >= 1
-                                else tau_list[i])
-                else:
-                    anchor_exp = torch.vstack((anchor_exp, exp_list[i]))
-                    anchor_t = torch.hstack((anchor_t,
-                                             tau_list[i] + t_sw_array[i-1]
-                                             if i >= 1 else tau_list[i]))
-
-                if not all_cells:
-                    anchor_prepend_rna = torch.zeros((1, 2),
-                                                     device=self.device,
-                                                     dtype=self.torch_type)
-                    anchor_prepend_chrom = torch.zeros((1, 3),
-                                                       device=self.device,
-                                                       dtype=self.torch_type)
-                    anchor_dist = torch.diff(tmp, dim=0,
-                                             prepend=anchor_prepend_rna
-                                             if rna_only
-                                             else anchor_prepend_chrom)
-
-                    anchor_dist = torch.sqrt((anchor_dist*anchor_dist)
-                                             .sum(axis=1))
-                    remove_cand = anchor_dist < (0.01*torch.max(exp_mat[1])
-                                                 if rna_only
-                                                 else
-                                                 0.01*torch.max(exp_mat[2]))
-                    step_idx = torch.arange(0, anchor_dist.size()[0], 1,
-                                            device=self.device,
-                                            dtype=self.torch_type) % 3 > 0
-                    remove_cand &= step_idx
-                    keep_idx = torch.where(~remove_cand)[0]
-
-                    tmp = tmp[keep_idx, :]
-
-                model = NearestNeighbors(n_neighbors=k, output_type="numpy")
-                model.fit(tmp.detach())
-                dd, ii = model.kneighbors(exp_mat.detach())
-                ii = ii.T[0]
-
-                new_dd = ((exp_mat[:, 0] - tmp[ii, 0])
-                          * (exp_mat[:, 0] - tmp[ii, 0])
-                          + (exp_mat[:, 1] - tmp[ii, 1])
-                          * (exp_mat[:, 1] - tmp[ii, 1])
-                          + (exp_mat[:, 2] - tmp[ii, 2])
-                          * (exp_mat[:, 2] - tmp[ii, 2]))
-
-                if k > 1:
-                    new_dd = torch.mean(new_dd, dim=1)
-                if conn is not None:
-                    new_dd = torch.matmul(conn, new_dd)
-
-                if i == 0:
-                    dists0 = dists0 + new_dd
-                elif i == 1:
-                    dists1 = dists1 + new_dd
-                elif i == 2:
-                    dists2 = dists2 + new_dd
-                elif i == 3:
-                    dists3 = dists3 + new_dd
-
-                if not all_cells:
-                    ii = keep_idx[ii]
-                if k == 1:
-                    taus = tau_list[i][ii]
-                else:
-                    for j in range(n):
-                        taus[j] = tau_list[i][ii[j, :]]
-
-                if i == 0:
-                    ts0 = ts0 + taus
-                elif i == 1:
-                    ts1 = ts1 + taus + t_sw_array[0]
-                elif i == 2:
-                    ts2 = ts2 + taus + t_sw_array[1]
-                elif i == 3:
-                    ts3 = ts3 + taus + t_sw_array[2]
-
-        dists = torch.cat((dists0, dists1, dists2, dists3), 0)
-
-        ts = torch.cat((ts0, ts1, ts2, ts3), 0)
-
-        state_pred = torch.argmin(dists, axis=0)
-
-        t_pred = ts[state_pred, torch.arange(n, device=self.device)]
-
-        anchor_t1_list = []
-        anchor_t2_list = []
-
-        t_sw_adjust = torch.zeros(3, device=self.device, dtype=self.torch_type)
-
-        if direction == 'complete':
-
-            dist_gap_add = torch.zeros((1, n), device=self.device,
-                                       dtype=self.torch_type)
-
-            t_sorted = torch.clone(t_pred)
-            t_sorted, t_sorted_indices = torch.sort(t_sorted)
-
-            dt = torch.diff(t_sorted, dim=0,
-                            prepend=torch.zeros(1, device=self.device,
-                                                dtype=self.torch_type))
-
-            gap_thresh = 3*torch.quantile(dt, 0.99)
-
-            idx = torch.where(dt > gap_thresh)[0]
-
-            if len(idx) > 0 and penalize_gap:
-                h_tens = torch.tensor([total_h], device=self.device,
-                                      dtype=self.torch_type)
-
-            for i in idx:
-
-                t1 = t_sorted[i-1] if i > 0 else 0
-                t2 = t_sorted[i]
-                anchor_t1 = anchor_exp[torch.argmin(torch.abs(anchor_t - t1)),
-                                       :]
-                anchor_t2 = anchor_exp[torch.argmin(torch.abs(anchor_t - t2)),
-                                       :]
-                if all_cells:
-                    anchor_t1_list.append(torch.ravel(anchor_t1))
-                    anchor_t2_list.append(torch.ravel(anchor_t2))
-                if not all_cells:
-                    for j in range(1, switch):
-                        crit1 = ((t1 > t_sw_array[j-1])
-                                 and (t2 > t_sw_array[j-1])
-                                 and (t1 <= t_sw_array[j])
-                                 and (t2 <= t_sw_array[j]))
-                        crit2 = ((torch.abs(anchor_t1[2]
-                                            - exp_sw_list[j][0, 2])
-                                  < 0.02 * max_s) and
-                                 (torch.abs(anchor_t2[2]
-                                            - exp_sw_list[j][0, 2])
-                                 < 0.01 * max_s))
-                        crit3 = ((torch.abs(anchor_t1[1]
-                                            - exp_sw_list[j][0, 1])
-                                 < 0.02 * max_u) and
-                                 (torch.abs(anchor_t2[1]
-                                            - exp_sw_list[j][0, 1])
-                                 < 0.01 * max_u))
-                        crit4 = ((torch.abs(anchor_t1[0]
-                                            - exp_sw_list[j][0, 0])
-                                 < 0.02 * max_c) and
-                                 (torch.abs(anchor_t2[0]
-                                            - exp_sw_list[j][0, 0])
-                                 < 0.01 * max_c))
-                        if crit1 and crit2 and crit3 and crit4:
-                            t_sw_adjust[j] += t2 - t1
-                if penalize_gap:
-                    dist_gap = torch.sum(((anchor_t1[1:] - anchor_t2[1:]) /
-                                          scale_factor_ten[1:])**2)
-
-                    idx_to_adjust = torch.tensor(t_pred >= t2,
-                                                 device=self.device)
-
-                    idx_to_adjust = torch.reshape(idx_to_adjust,
-                                                  (1, idx_to_adjust.size()[0]))
-
-                    true_tensor = torch.tensor([True], device=self.device)
-                    false_tensor = torch.tensor([False], device=self.device)
-
-                    t_sw_array_ = torch.cat((t_sw_array, h_tens), dim=0)
-                    state_to_adjust = torch.where(t_sw_array_ > t2,
-                                                  true_tensor, false_tensor)
-
-                    dist_gap_add[idx_to_adjust] += dist_gap
-
-                    if state_to_adjust[0].item():
-                        dists0 += dist_gap_add
-                    if state_to_adjust[1].item():
-                        dists1 += dist_gap_add
-                    if state_to_adjust[2].item():
-                        dists2 += dist_gap_add
-                    if state_to_adjust[3].item():
-                        dists3 += dist_gap_add
-
-                    dist_gap_add[idx_to_adjust] -= dist_gap
-
-            dists = torch.cat((dists0, dists1, dists2, dists3), 0)
-
-            state_pred = torch.argmin(dists, dim=0)
-
-            if all_cells:
-                t_pred = ts[torch.arange(n, device=self.device), state_pred]
-
-        min_dist = torch.min(dists, dim=0).values
-
-        if all_cells:
-            exp_ss_mat = compute_ss_exp(alpha_c, alpha, beta, gamma,
-                                        model=model)
-            if rna_only:
-                exp_ss_mat[:, 0] = 1
-            dists_ss = pairwise_distance_square(exp_mat, exp_ss_mat *
-                                                rescale_factor / scale_factor)
-
-            reach_ss = np.full((n, 4), False)
-            for i in range(n):
-                for j in range(4):
-                    if min_dist[i] > dists_ss[i, j]:
-                        reach_ss[i, j] = True
-            late_phase = np.full(n, -1)
-            for i in range(3):
-                late_phase[torch.abs(t_pred - t_sw_array[i]) < 0.1] = i
-
-            return min_dist, t_pred, state_pred.cpu().detach().numpy(), \
-                reach_ss, late_phase, max_u, max_s, anchor_t1_list, \
-                anchor_t2_list
-
-        else:
-            return min_dist, state_pred.cpu().detach().numpy(), max_u, max_s, \
-                   t_sw_adjust.cpu().detach().numpy()
-
-    # the torch tensor version of the mse function
-    def mse_ten(self, x, fit_outlier=False,
-                penalize_gap=True):
-
-        t3 = x[:3]
-        r4 = x[3:7]
-        scale_cc = x[7]
-        rescale_c = x[8]
-        rescale_u = x[9]
-
-        if not self.known_pars:
-            if self.fit_decoupling:
-                t3 = torch.clip(t3, 0.1, None)
-            else:
-                t3[2] = 30 / self.n_anchors
-                t3[:2] = torch.clip(t3[:2], 0.1, None)
-            r4 = torch.clip(r4, 0.001, 1000)
-            rescale_c = torch.clip(rescale_c, 0.75, 1.5)
-            rescale_u = torch.clip(rescale_u, 0.2, 3)
-
-        t_sw_array = torch.cumsum(t3, dim=0)
-
-        if self.rna_only:
-            t_sw_array[2] = 20
-
-        # conditions for minimum switch time and rate params
-        penalty = 0
-        if any(t3 < 0.2) or any(r4 < 0.005):
-            penalty = (torch.sum(0.2 - t3[t3 < 0.2]) if self.fit_decoupling
-                       else torch.sum(0.2 - t3[:2][t3[:2] < 0.2]))
-            penalty += torch.sum(0.005 - r4[r4 < 0.005]) * 1e2
-
-        # condition for all params
-        if any(x > 500):
-            penalty = torch.sum(x[x > 500] - 500) * 1e-2
-
-        c_array = self.c_all if fit_outlier else self.c
-        u_array = self.u_all if fit_outlier else self.u
-        s_array = self.s_all if fit_outlier else self.s
-
-        if self.batch_size is not None and self.batch_size < len(c_array):
-
-            subset_choice = np.random.choice(len(c_array), self.batch_size,
-                                             replace=False)
-
-            c_array = c_array[subset_choice]
-            u_array = u_array[subset_choice]
-            s_array = s_array[subset_choice]
-
-            if fit_outlier:
-                conn_for_calc = self.conn[subset_choice]
-            if not fit_outlier:
-                conn_for_calc = self.conn_sub[subset_choice]
-
-            conn_for_calc = ((conn_for_calc.T)[subset_choice]).T
-
-        else:
-
-            if fit_outlier:
-                conn_for_calc = self.conn
-            if not fit_outlier:
-                conn_for_calc = self.conn_sub
-
-        scale_factor_func = np.array(self.scale_factor, dtype=self.u.dtype)
-
-        # distances and time assignments
-        res = self.calculate_dist_and_time_ten(c_array,
-                                               u_array,
-                                               s_array,
-                                               t_sw_array,
-                                               r4[0],
-                                               r4[1],
-                                               r4[2],
-                                               r4[3],
-                                               rescale_c,
-                                               rescale_u,
-                                               scale_cc=scale_cc,
-                                               scale_factor=scale_factor_func,
-                                               model=self.model,
-                                               direction=self.direction,
-                                               conn=conn_for_calc,
-                                               k=self.k_dist,
-                                               t=self.n_anchors,
-                                               rna_only=self.rna_only,
-                                               penalize_gap=penalize_gap,
-                                               all_cells=fit_outlier)
-
-        if fit_outlier:
-            min_dist, t_pred, state_pred, reach_ss, late_phase, max_u, max_s, \
-                self.anchor_t1_list, self.anchor_t2_list = res
-        else:
-            min_dist, state_pred, max_u, max_s, t_sw_adjust = res
-
-        loss = torch.mean(min_dist)
-
-        # avoid exceeding maximum expressions
-        reg = torch.max(torch.tensor([0, max_s - torch.tensor(self.max_s)],
-                                     requires_grad=True,
-                                     dtype=self.torch_type))\
-            + torch.max(torch.tensor([0, max_u - torch.tensor(self.max_u)],
-                                     requires_grad=True,
-                                     dtype=self.torch_type))
-
-        loss += reg
-
-        loss += 1e-1 * penalty
-
-        self.cur_loss = loss.item()
-        self.cur_state_pred = state_pred
-
-        if fit_outlier:
-            return loss, t_pred
-        else:
-            self.cur_t_sw_adjust = t_sw_adjust
-
-        return loss
 
     def mse(self, x, fit_outlier=False, penalize_gap=True):
         x = np.array(x)
@@ -3611,78 +1947,34 @@ class ChromatinDynamical:
         u_array = self.u_all if fit_outlier else self.u
         s_array = self.s_all if fit_outlier else self.s
 
-        if self.neural_net:
+        # distances and time assignments
+        res = calculate_dist_and_time(c_array,
+                                      u_array,
+                                      s_array,
+                                      t_sw_array,
+                                      r4[0],
+                                      r4[1],
+                                      r4[2],
+                                      r4[3],
+                                      rescale_c,
+                                      rescale_u,
+                                      scale_cc=scale_cc,
+                                      scale_factor=self.scale_factor,
+                                      model=self.model,
+                                      direction=self.direction,
+                                      conn=self.conn if fit_outlier
+                                      else self.conn_sub,
+                                      k=self.k_dist,
+                                      t=self.n_anchors,
+                                      rna_only=self.rna_only,
+                                      penalize_gap=penalize_gap,
+                                      all_cells=fit_outlier)
 
-            res = calculate_dist_and_time_nn(c_array,
-                                             u_array,
-                                             s_array,
-                                             self.max_u_all if fit_outlier
-                                             else self.max_u,
-                                             self.max_s_all if fit_outlier
-                                             else self.max_s,
-                                             t_sw_array,
-                                             r4[0],
-                                             r4[1],
-                                             r4[2],
-                                             r4[3],
-                                             rescale_c,
-                                             rescale_u,
-                                             self.ode_model_0,
-                                             self.ode_model_1,
-                                             self.ode_model_2_m1,
-                                             self.ode_model_2_m2,
-                                             self.device,
-                                             scale_cc=scale_cc,
-                                             scale_factor=self.scale_factor,
-                                             model=self.model,
-                                             direction=self.direction,
-                                             conn=self.conn if fit_outlier
-                                             else self.conn_sub,
-                                             k=self.k_dist,
-                                             t=self.n_anchors,
-                                             rna_only=self.rna_only,
-                                             penalize_gap=penalize_gap,
-                                             all_cells=fit_outlier)
-
-            if fit_outlier:
-                min_dist, t_pred, state_pred, max_u, max_s, nn_penalty = res
-            else:
-                min_dist, state_pred, max_u, max_s, nn_penalty = res
-
-            penalty += nn_penalty
-
-            t_sw_adjust = [0, 0, 0]
-
+        if fit_outlier:
+            min_dist, t_pred, state_pred, reach_ss, late_phase, max_u, max_s, \
+                self.anchor_t1_list, self.anchor_t2_list = res
         else:
-
-            # distances and time assignments
-            res = calculate_dist_and_time(c_array,
-                                          u_array,
-                                          s_array,
-                                          t_sw_array,
-                                          r4[0],
-                                          r4[1],
-                                          r4[2],
-                                          r4[3],
-                                          rescale_c,
-                                          rescale_u,
-                                          scale_cc=scale_cc,
-                                          scale_factor=self.scale_factor,
-                                          model=self.model,
-                                          direction=self.direction,
-                                          conn=self.conn if fit_outlier
-                                          else self.conn_sub,
-                                          k=self.k_dist,
-                                          t=self.n_anchors,
-                                          rna_only=self.rna_only,
-                                          penalize_gap=penalize_gap,
-                                          all_cells=fit_outlier)
-
-            if fit_outlier:
-                min_dist, t_pred, state_pred, reach_ss, late_phase, max_u, \
-                    max_s, self.anchor_t1_list, self.anchor_t2_list = res
-            else:
-                min_dist, state_pred, max_u, max_s, t_sw_adjust = res
+            min_dist, state_pred, max_u, max_s, t_sw_adjust = res
 
         loss = np.mean(min_dist)
 
@@ -3751,9 +2043,10 @@ class ChromatinDynamical:
             if fit_outlier:
                 self.t = t_pred
 
-            logg.update(f'params updated as: {self.t_sw_array} {self.rates} '
-                        f'{self.scale_cc} {self.rescale_c} {self.rescale_u}',
-                        v=2)
+            if self.verbose >= 2:
+                print(f'params updated as: {self.t_sw_array} {self.rates} '
+                      '{self.scale_cc} {self.rescale_c} {self.rescale_u}')
+                print(f'current loss: {self.loss[-1]}')
 
             # interactive plot
             if self.plot and plot:
@@ -3761,11 +2054,6 @@ class ChromatinDynamical:
                 switch = np.sum(self.t_sw_array < 20)
                 typed_tau_list = List()
                 [typed_tau_list.append(x) for x in tau_list]
-                self.alpha_c, self.alpha, self.beta, self.gamma, \
-                    self.c0, self.u0, self.s0 = \
-                    check_params(self.alpha_c, self.alpha, self.beta,
-                                 self.gamma, c0=self.c0, u0=self.u0,
-                                 s0=self.s0)
                 exp_list, exp_sw_list = generate_exp(typed_tau_list,
                                                      self.t_sw_array[:switch],
                                                      self.alpha_c,
@@ -3852,7 +2140,8 @@ class ChromatinDynamical:
                       show_all=False):
         if not os.path.exists(self.plot_path):
             os.makedirs(self.plot_path)
-            logg.update(f'{self.plot_path} directory created.', v=2)
+            if self.verbose >= 2:
+                print(f'{self.plot_path} directory created.')
 
         switch = np.sum(self.t_sw_array < 20)
         scale_back = np.array([self.scale_c, self.scale_u, self.scale_s])
@@ -4160,13 +2449,10 @@ class ChromatinDynamical:
         self.u0 = u[self.anchor_min_idx]
         self.s0 = s[self.anchor_min_idx]
         self.realign_ratio = 20 / (np.max(self.t) - np.min(self.t))
-        logg.update(f'fitted params:\nswitch time array = {self.t_sw_array},\n'
-                    f'rates = {self.rates},\ncc scale = {self.scale_cc},\n'
-                    f'c rescale factor = {self.rescale_c},\n'
-                    f'u rescale factor = {self.rescale_u}',
-                    v=1)
-        logg.update(f'aligning to range (0,20) by {self.realign_ratio}..',
-                    v=1)
+        if self.verbose >= 1:
+            print(f'fitted params: {self.t_sw_array} {self.rates} '
+                  '{self.scale_cc} {self.rescale_c} {self.rescale_u}')
+            print(f'aligning to range (0,20) by {self.realign_ratio}..')
         self.rates /= self.realign_ratio
         self.alpha_c, self.alpha, self.beta, self.gamma = self.rates
         self.params[3:7] = self.rates
@@ -4225,20 +2511,13 @@ class ChromatinDynamical:
             self.anchor_velo_min_idx, self.anchor_velo_max_idx
 
 
-def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist,
-                 embed, conn, pl, sp, pdir, fa, gene, pa, di, ro, fit, fd,
-                 extra, ru, alpha, beta, gamma, t_, verbosity, log_folder,
-                 log_filename):
+def regress_func(c, u, s, m, mi, im, gpdist, embed, conn, v, pl, sp, pdir, fa,
+                 gene, pa, di, ro, fit, fd, extra, ru, alpha, beta, gamma, t_):
 
-    settings.VERBOSITY = verbosity
-    settings.LOG_FOLDER = log_folder
-    settings.LOG_FILENAME = log_filename
-    settings.GENE = gene
-
-    if m is not None:
-        logg.update('#########################################################'
-                    '######################################', v=1)
-        logg.update(f'testing model {m}', v=1)
+    if v >= 1 and m is not None:
+        print('###############################################################'
+              '################################')
+        print(f'testing model {m}')
 
     c_90 = np.percentile(c, 90)
     u_90 = np.percentile(u, 90)
@@ -4246,7 +2525,8 @@ def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist,
     low_quality = (u_90 == 0 or s_90 == 0) if ro else (c_90 == 0 or u_90 == 0
                                                        or s_90 == 0)
     if low_quality:
-        logg.update(f'low quality gene {gene}, skipping', v=1)
+        if v >= 1:
+            print(f'low quality gene {gene}, skipping')
         return (np.inf, np.nan, '', (np.zeros(3), np.zeros(4), 0, 0, 0, 0),
                 np.zeros(3), np.zeros(len(u)), np.zeros(len(u)),
                 np.zeros((len(u), 3)), (-1.0, 0, 0, 0),
@@ -4272,16 +2552,10 @@ def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist,
                              model=m,
                              max_iter=mi,
                              init_mode=im,
-                             device=dev,
-                             neural_net=nn,
-                             adam=ad,
-                             adam_lr=lr,
-                             adam_beta1=b1,
-                             adam_beta2=b2,
-                             batch_size=bs,
                              local_std=local_std,
                              embed_coord=embed,
                              connectivities=conn,
+                             verbose=v,
                              plot=pl,
                              save_plot=sp,
                              plot_dir=pdir,
@@ -4299,8 +2573,8 @@ def regress_func(c, u, s, m, mi, im, dev, nn, ad, lr, b1, b2, bs, gpdist,
                              t_=t_)
     if fit:
         loss = cdc.fit()
-        if loss[-1] == np.inf:
-            logg.update(f'low quality gene {gene}, skipping..', v=1)
+        if loss[-1] == np.inf and v >= 1:
+            print(f'low quality gene {gene}, skipping..')
     loss = cdc.get_loss()
     model = cdc.get_model()
     direction = cdc.get_direction()
@@ -4319,16 +2593,10 @@ def multimodel_helper(c, u, s,
                       model_to_run,
                       max_iter,
                       init_mode,
-                      device,
-                      neural_net,
-                      adam,
-                      adam_lr,
-                      adam_beta1,
-                      adam_beta2,
-                      batch_size,
                       global_pdist,
                       embed_coord,
                       conn,
+                      verbose,
                       plot,
                       save_plot,
                       plot_dir,
@@ -4344,8 +2612,8 @@ def multimodel_helper(c, u, s,
                       alpha,
                       beta,
                       gamma,
-                      t_,
-                      verbosity, log_folder, log_filename):
+                      t_
+                      ):
 
     loss, param_cand, initial_cand, time_cand = [], [], [], []
     state_cand, velo_cand, likelihood_cand, anch_cand = [], [], [], []
@@ -4353,11 +2621,10 @@ def multimodel_helper(c, u, s,
     for model in model_to_run:
         (loss_m, _, direction_, parameters, initial_exp,
          time, state, velocity, likelihood, anchors) = \
-         regress_func(c, u, s, model, max_iter, init_mode, device, neural_net,
-                      adam, adam_lr, adam_beta1, adam_beta2, batch_size,
-                      global_pdist, embed_coord, conn, plot, save_plot,
-                      plot_dir, fit_args, gene, partial, direction, rna_only,
-                      fit, fit_decoupling, extra_color, rescale_u, alpha, beta,
+         regress_func(c, u, s, model, max_iter, init_mode, global_pdist,
+                      embed_coord, conn, verbose, plot, save_plot, plot_dir,
+                      fit_args, gene, partial, direction, rna_only, fit,
+                      fit_decoupling, extra_color, rescale_u, alpha, beta,
                       gamma, t_)
         loss.append(loss_m)
         param_cand.append(parameters)
@@ -4377,7 +2644,7 @@ def multimodel_helper(c, u, s,
     velocity = velo_cand[best_model]
     likelihood = likelihood_cand[best_model]
     anchors = anch_cand[best_model]
-    return loss, model, direction_, parameters, initial_exp, time, state, \
+    return loss, model, direction_, parameters, initial_exp, time, state,\
         velocity, likelihood, anchors
 
 
@@ -4386,14 +2653,8 @@ def recover_dynamics_chrom(adata_rna,
                            gene_list=None,
                            max_iter=5,
                            init_mode='invert',
-                           device="cpu",
-                           neural_net=False,
-                           adam=False,
-                           adam_lr=None,
-                           adam_beta1=None,
-                           adam_beta2=None,
-                           batch_size=None,
                            model_to_run=None,
+                           verbose=False,
                            plot=False,
                            parallel=True,
                            n_jobs=None,
@@ -4443,36 +2704,15 @@ def recover_dynamics_chrom(adata_rna,
         inversion method.
         `'grid'`: grid search the best set of switch times.
         `'simple'`: simply initialize switch times to be 5, 10, and 15.
-    device: `str` (default: `'cpu'`)
-        The CUDA device that pytorch tensor calculations will be run on. Only
-        to be used with Adam or Neural Network mode.
-    neural_net: `bool` (default: `False`)
-        Whether to run time predictions with a neural network or not. Shortens
-        runtime at the expense of accuracy. If False, uses the usual method of
-        assigning each data point to an anchor time point as outlined in the
-        Multivelo paper.
-    adam: `bool` (default: `False`)
-        Whether MSE minimization is handled by the Adam algorithm or not. When
-        set to the default of False, function uses Nelder-Mead instead.
-    adam_lr: `float` (default: `None`)
-        The learning rate to use the Adam algorithm. If adam is False, this
-        value is ignored.
-    adam_beta1: `float` (default: `None`)
-        The beta1 parameter for the Adam algorithm. If adam is False, this
-        value is ignored.
-    adam_beta2: `float` (default: `None`)
-        The beta2 parameter for the Adam algorithm. If adam is False, this
-        value is ignored.
-    batch_size: `int` (default: `None`)
-        Speeds up performance using minibatch training. Specifies number of
-        cells to use per run of MSE when running the Adam algorithm. Ignored
-        if Adam is set to False.
     model_to_run: `int` or list of `int` (default: `None`)
         User specified models for each genes. Possible values are 1 are 2. If
         `None`, the model
         for each gene will be inferred based on expression patterns. If more
         than one value is given,
         the best model will be decided based on loss of fit.
+    verbose: `int` or `bool` (default: `False`)
+        Level of fitting detail to output. Possible values: `False`, 0, 1, 2,
+        or any number above 2.
     plot: `bool` or `None` (default: `False`)
         Whether to interactively plot the 3D gene portraits. Ignored if
         parallel is True.
@@ -4617,25 +2857,6 @@ def recover_dynamics_chrom(adata_rna,
     fit_args['fig_size'] = list(fig_size)
     fit_args['point_size'] = point_size
 
-    if adam and neural_net:
-        raise Exception("ADAM and Neural Net mode can not be run concurently."
-                        " Please choose one to run on.")
-
-    if not adam and not neural_net and not device == "cpu":
-        raise Exception("Multivelo only uses non-CPU devices for Adam or"
-                        " Neural Network mode. Please use one of those or"
-                        "set the device to \"cpu\"")
-
-    if adam and not device[0:5] == "cuda:":
-        raise Exception("ADAM and Neural Net mode are only possible on a cuda "
-                        "device. Please try again.")
-    if not adam and batch_size is not None:
-        raise Exception("Batch training is for ADAM only, please set "
-                        "batch_size to None")
-
-    if adam:
-        from cuml.neighbors import NearestNeighbors
-
     all_genes = adata_rna.var_names
     if adata_atac is None:
         import anndata as ad
@@ -4684,8 +2905,8 @@ def recover_dynamics_chrom(adata_rna,
     rna_conn = rna_conn.multiply(1.0 / rna_conn.sum(1)).tocsr()
     if not rna_only:
         if 'connectivities' not in adata_atac.obsp.keys():
-            logg.update('Missing connectivities in ATAC adata object, using '
-                        'RNA connectivities instead', v=1)
+            print('Missing connectivities in ATAC adata object, using RNA'
+                  ' connectivities instead')
             atac_conn = rna_conn
         else:
             atac_conn = adata_atac.obsp['connectivities'].copy()
@@ -4719,7 +2940,10 @@ def recover_dynamics_chrom(adata_rna,
     gn = len(gene_list)
     if gn == 0:
         raise ValueError('None of the genes specified are in the adata object')
-    logg.update(f'{gn} genes will be fitted', v=1)
+    if verbose is True:
+        verbose = 1
+    if verbose >= 1:
+        print(f'{gn} genes will be fitted')
 
     models = np.zeros(gn)
     t_sws = np.zeros((gn, 3))
@@ -4756,8 +2980,8 @@ def recover_dynamics_chrom(adata_rna,
 
     if rna_only:
         model_to_run = [2]
-        logg.update('Skipping model checking for RNA-only, running model 2',
-                    v=1)
+        if verbose >= 1:
+            print('Skipping model checking for RNA-only, running model 2')
 
     m_per_g = False
     if model_to_run is not None:
@@ -4864,8 +3088,8 @@ def recover_dynamics_chrom(adata_rna,
         if n_jobs > gn:
             n_jobs = gn
         batches = -(-gn // n_jobs)
-        if n_jobs > 1:
-            logg.update(f'running {n_jobs} jobs in parallel', v=1)
+        if n_jobs > 1 and verbose >= 1:
+            print(f'running {n_jobs} jobs in parallel')
     else:
         n_jobs = 1
         batches = gn
@@ -4876,18 +3100,9 @@ def recover_dynamics_chrom(adata_rna,
     for group in range(batches):
         gene_indices = range(group * n_jobs, np.min([gn, (group+1) * n_jobs]))
         if parallel:
-            verb = 51 if settings.VERBOSITY >= 2 else 0
+            verb = 5 if verbose >= 2 else 0
+            verbose = False
             plot = False
-
-            # clear the settings file if it exists
-            open("settings.txt", "w").close()
-
-            # write our current settings to the file
-            with open("settings.txt", "a") as sfile:
-                sfile.write(str(settings.VERBOSITY) + "\n")
-                sfile.write(str(settings.CWD) + "\n")
-                sfile.write(str(settings.LOG_FOLDER) + "\n")
-                sfile.write(str(settings.LOG_FILENAME) + "\n")
 
             res = Parallel(n_jobs=n_jobs, backend='loky', verbose=verb)(
                 delayed(func_to_call)(
@@ -4897,16 +3112,10 @@ def recover_dynamics_chrom(adata_rna,
                     model_to_run[i] if m_per_g else model_to_run,
                     max_iter,
                     init_mode,
-                    device,
-                    neural_net,
-                    adam,
-                    adam_lr,
-                    adam_beta1,
-                    adam_beta2,
-                    batch_size,
                     global_pdist,
                     embed_coord,
                     rna_conn,
+                    verbose,
                     plot,
                     save_plot,
                     plot_dir,
@@ -4925,10 +3134,7 @@ def recover_dynamics_chrom(adata_rna,
                     else beta,
                     gamma[i] if isinstance(gamma, (list, np.ndarray))
                     else gamma,
-                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw,
-                    settings.VERBOSITY,
-                    settings.LOG_FOLDER,
-                    settings.LOG_FILENAME)
+                    t_sw[i] if isinstance(t_sw, (list, np.ndarray)) else t_sw)
                 for i in gene_indices)
 
             for i, r in zip(gene_indices, res):
@@ -4976,23 +3182,16 @@ def recover_dynamics_chrom(adata_rna,
         else:
             i = group
             gene = gene_list[i]
-            logg.update(f'@@@@@fitting {gene}', v=1)
+            if verbose >= 1:
+                print(f'@@@@@fitting {gene}')
             (loss, model, direct_out,
              parameters, initial_exp,
              time, state, velocity,
              likelihood, anchors) = \
                 func_to_call(c_mat[:, i], u_mat[:, i], s_mat[:, i],
                              model_to_run[i] if m_per_g else model_to_run,
-                             max_iter, init_mode,
-                             device,
-                             neural_net,
-                             adam,
-                             adam_lr,
-                             adam_beta1,
-                             adam_beta2,
-                             batch_size,
-                             global_pdist, embed_coord,
-                             rna_conn, plot, save_plot, plot_dir,
+                             max_iter, init_mode, global_pdist, embed_coord,
+                             rna_conn, verbose, plot, save_plot, plot_dir,
                              fit_args, gene,
                              partial[i] if p_per_g else partial,
                              direction[i] if d_per_g else direction,
@@ -5006,10 +3205,7 @@ def recover_dynamics_chrom(adata_rna,
                              gamma[i] if isinstance(gamma, (list, np.ndarray))
                              else gamma,
                              t_sw[i] if isinstance(t_sw, (list, np.ndarray))
-                             else t_sw,
-                             settings.VERBOSITY,
-                             settings.LOG_FOLDER,
-                             settings.LOG_FILENAME)
+                             else t_sw)
             switch, rate, scale_cc, rescale_c, rescale_u, realign_ratio = \
                 parameters
             likelihood, l_c, ssd_c, var_c = likelihood
@@ -5168,7 +3364,8 @@ def set_velocity_genes(adata,
                        gamma_upper=None,
                        gamma_lower=None,
                        scale_cc_upper=None,
-                       scale_cc_lower=None
+                       scale_cc_lower=None,
+                       verbose=False
                        ):
     """Reset velocity genes.
 
@@ -5216,6 +3413,8 @@ def set_velocity_genes(adata,
         Maximum scale_cc.
     scale_cc_lower: `float` (default: `None`)
         Minimum scale_cc.
+    verbose: `bool` (default: `False`)
+        Whether to print the number of velocity genes.
 
     Returns
     -------
@@ -5265,7 +3464,8 @@ def set_velocity_genes(adata,
         v_genes &= adata.var['fit_scale_cc'] <= scale_cc_upper
     if scale_cc_lower is not None:
         v_genes &= adata.var['fit_scale_cc'] >= scale_cc_lower
-    logg.update(f'{np.sum(v_genes)} velocity genes were selected', v=1)
+    if verbose:
+        print(f'{np.sum(v_genes)} velocity genes were selected')
     adata.var['velo_s_genes'] = adata.var['velo_u_genes'] = \
         adata.var['velo_chrom_genes'] = v_genes
 
@@ -5393,15 +3593,15 @@ def LRT_decoupling(adata_rna, adata_atac, **kwargs):
         LRT statistics
     """
     from scipy.stats.distributions import chi2
-    logg.update('fitting models with decoupling intervals', v=0)
+    print('fitting models with decoupling intervals')
     adata_result_w_decoupled = recover_dynamics_chrom(adata_rna, adata_atac,
                                                       fit_decoupling=True,
                                                       **kwargs)
-    logg.update('fitting models without decoupling intervals', v=0)
+    print('fitting models without decoupling intervals')
     adata_result_wo_decoupled = recover_dynamics_chrom(adata_rna, adata_atac,
                                                        fit_decoupling=False,
                                                        **kwargs)
-    logg.update('testing likelihood ratio', v=0)
+    print('testing likelihood ratio')
     shared_genes = pd.Index(np.intersect1d(adata_result_w_decoupled.var_names,
                                            adata_result_wo_decoupled.var_names)
                             )
@@ -5749,7 +3949,7 @@ def dynamic_plot(adata,
     genes = np.array(genes)
     missing_genes = genes[~np.isin(genes, adata.var_names)]
     if len(missing_genes) > 0:
-        logg.update(f'{missing_genes} not found', v=0)
+        print(f'{missing_genes} not found')
     genes = genes[np.isin(genes, adata.var_names)]
     gn = len(genes)
     if gn == 0:
@@ -6044,7 +4244,7 @@ def scatter_plot(adata,
     genes = np.array(genes)
     missing_genes = genes[~np.isin(genes, adata.var_names)]
     if len(missing_genes) > 0:
-        logg.update(f'{missing_genes} not found', v=0)
+        print(f'{missing_genes} not found')
     genes = genes[np.isin(genes, adata.var_names)]
     gn = len(genes)
     if gn == 0:
